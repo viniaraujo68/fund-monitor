@@ -1,0 +1,9 @@
+data/raw/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+*.part
+node_modules/
+web/.svelte-kit/
+web/build/
+.DS_Store
