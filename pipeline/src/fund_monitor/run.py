@@ -4,6 +4,9 @@ from datetime import date
 import polars as pl
 
 from fund_monitor import config
+from fund_monitor.collect.anbima_ima import collect_ima
+from fund_monitor.collect.b3_ibovespa import collect_ibovespa
+from fund_monitor.collect.bcb_sgs import collect_bcb
 from fund_monitor.collect.cvm_daily import collect_daily
 from fund_monitor.collect.cvm_registry import collect_registry
 from fund_monitor.universe import GENERAL_PUBLIC, select_manager_series, select_monitored_series
@@ -15,6 +18,13 @@ logger = logging.getLogger("fund_monitor")
 
 
 def run_collect(reference_date: date) -> None:
+    run_collect_cvm(reference_date)
+    collect_bcb(config.WINDOW_START, reference_date)
+    collect_ima(config.WINDOW_START, reference_date)
+    collect_ibovespa(config.WINDOW_START, reference_date)
+
+
+def run_collect_cvm(reference_date: date) -> None:
     registry = collect_registry(reference_date)
     manager_series = select_manager_series(registry, config.MANAGER_CNPJ)
     monitored = select_monitored_series(registry, config.MANAGER_CNPJ)
