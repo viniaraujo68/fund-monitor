@@ -4,6 +4,7 @@ from datetime import date
 import polars as pl
 
 from fund_monitor import config
+from fund_monitor.calc.engine import calculate, write_metrics
 from fund_monitor.collect.anbima_ima import collect_ima
 from fund_monitor.collect.b3_ibovespa import collect_ibovespa
 from fund_monitor.collect.bcb_sgs import collect_bcb
@@ -11,7 +12,7 @@ from fund_monitor.collect.cvm_daily import collect_daily
 from fund_monitor.collect.cvm_registry import collect_registry
 from fund_monitor.universe import GENERAL_PUBLIC, select_manager_series, select_monitored_series
 
-STAGES = ("collect",)
+STAGES = ("collect", "calc")
 REFERENCE_DATE = date.today()
 
 logger = logging.getLogger("fund_monitor")
@@ -44,6 +45,8 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     if "collect" in STAGES:
         run_collect(REFERENCE_DATE)
+    if "calc" in STAGES:
+        write_metrics(calculate(pl.read_parquet(config.REGISTRY_PARQUET)))
 
 
 if __name__ == "__main__":
