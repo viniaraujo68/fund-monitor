@@ -30,6 +30,26 @@ const monthNameFormat = createFormatters("pt-BR", {
   date: { dateStyle: undefined, month: "long", year: "numeric" },
 });
 
+const AXIS_MAX_DIGITS = 4;
+
+const axisFormats = Array.from({ length: AXIS_MAX_DIGITS + 1 }, (_, digits) =>
+  createFormatters("pt-BR", {
+    number: { minimumFractionDigits: digits, maximumFractionDigits: digits },
+    percent: { minimumFractionDigits: digits, maximumFractionDigits: digits },
+  }),
+);
+
+const stepDigits = (step: number): number => {
+  if (!(step > 0) || !Number.isFinite(step)) return 0;
+  for (let digits = 0; digits < AXIS_MAX_DIGITS; digits += 1) {
+    const scaled = step * 10 ** digits;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return digits;
+  }
+  return AXIS_MAX_DIGITS;
+};
+
+const axisFormat = (step: number) => axisFormats[stepDigits(step)] ?? base;
+
 const compactMoneyFormat = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -46,6 +66,12 @@ export const percentShort = (value: Maybe): string => orDash(shortPercentFormat.
 export const percentWhole = (value: Maybe): string => orDash(wholePercentFormat.percent(value));
 
 export const ratio2 = (value: Maybe): string => orDash(ratioFormat.number(value));
+
+export const axisNumber = (value: number, step: number): string =>
+  orDash(axisFormat(step).number(value === 0 ? 0 : value));
+
+export const axisPercent = (value: number, step: number): string =>
+  orDash(axisFormat(step * 100).percent(value === 0 ? 0 : value));
 
 export const integer = (value: Maybe): string => orDash(base.number(value));
 

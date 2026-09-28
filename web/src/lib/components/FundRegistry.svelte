@@ -1,10 +1,10 @@
 <script lang="ts">
   import { Copyable } from "@viniaraujo68/plinth/components";
-  import type { FundSummary } from "$lib/data/types";
+  import type { FundSummary, IsoDate } from "$lib/data/types";
   import { cnpj, DASH, date } from "$lib/format";
   import { benchmarkList } from "$lib/labels";
 
-  const { summary }: { summary: FundSummary } = $props();
+  const { summary, windowStart }: { summary: FundSummary; windowStart: IsoDate } = $props();
 
   const facts = $derived<{ term: string; value: string }[]>([
     { term: "Classificação CVM", value: summary.cvm_classification ?? DASH },
@@ -13,7 +13,7 @@
     { term: "Condomínio", value: summary.condominium ?? DASH },
     { term: "Indicador de desempenho declarado", value: summary.performance_benchmark ?? DASH },
     { term: "Comparado com", value: benchmarkList(summary.benchmarks) },
-    { term: "Início da série", value: date(summary.first_date) },
+    { term: `Primeira cota na janela (desde ${date(windowStart)})`, value: date(summary.first_date) },
     { term: "Última cota", value: date(summary.last_date) },
   ]);
 </script>

@@ -13,7 +13,7 @@
   import SourceDates from "$lib/components/SourceDates.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
   import type { Issue } from "$lib/data/types";
-  import { DASH, integer } from "$lib/format";
+  import { cnpj, DASH, integer } from "$lib/format";
   import {
     issueMagnitude,
     issueMeasure,
@@ -24,6 +24,8 @@
     ruleLabel,
   } from "$lib/issues";
   import { ALL, SEVERITIES, SEVERITY_LABELS, severityRank, type Severity } from "$lib/labels";
+  import { TABLE_LABELS } from "$lib/table";
+  import type { Snapshot } from "./$types";
 
   const { data } = $props();
 
@@ -41,7 +43,7 @@
   type SeverityFilter = Severity | typeof ALL;
 
   const SEVERITY_HINTS: Record<Severity, string> = {
-    high: "dado inválido, excluído do cálculo",
+    high: "linha zerada (descartada do cálculo) ou fonte muito atrasada",
     medium: "provável erro ou evento a explicar",
     low: "lacuna pequena",
     info: "explicado pelo mercado ou pelo cadastro",
@@ -56,16 +58,19 @@
 
   const SEVERITY_OPTIONS: { id: SeverityFilter; label: string }[] = [
     { id: ALL, label: "Todas" },
-    { id: "high", label: "Alta" },
-    { id: "medium", label: "Média" },
-    { id: "low", label: "Baixa" },
-    { id: "info", label: "Info" },
+    ...SEVERITIES.map((level) => ({ id: level, label: SEVERITY_LABELS[level] })),
   ];
 
   const RULE_OPTIONS: SelectOption[] = [
     { value: ALL, label: "Todas" },
     ...RULES.map((rule) => ({ value: rule, label: ruleLabel(rule) })),
   ];
+
+  const seriesTerms = (seriesId: string | null): string => {
+    if (seriesId === null) return "";
+    const classCnpj = seriesId.split("-")[0] ?? seriesId;
+    return `${seriesId} ${cnpj(classCnpj)}`;
+  };
 
   const summary = $derived(data.quality.summary);
   const linkable = $derived(new Set(data.fundIds));
@@ -78,7 +83,9 @@
           ...issue,
           index,
           text,
-          haystack: normalizeForSearch(`${text} ${issue.display_name ?? ""} ${ruleLabel(issue.rule)}`),
+          haystack: normalizeForSearch(
+            `${text} ${issue.display_name ?? ""} ${ruleLabel(issue.rule)} ${seriesTerms(issue.series_id)}`,
+          ),
         };
       })
       .sort((left, right) => (right.date ?? "").localeCompare(left.date ?? "")),
@@ -104,6 +111,23 @@
   let severity = $state<SeverityFilter>(ALL);
   let fund = $state<string | null>(null);
   let query = $state("");
+
+  interface Filters {
+    rule: string | null;
+    severity: SeverityFilter;
+    fund: string | null;
+    query: string;
+  }
+
+  export const snapshot: Snapshot<Filters> = {
+    capture: () => ({ rule, severity, fund, query }),
+    restore: (filters) => {
+      rule = filters.rule;
+      severity = filters.severity;
+      fund = filters.fund;
+      query = filters.query;
+    },
+  };
 
   const needle = $derived(normalizeForSearch(query.trim()));
 
@@ -165,7 +189,7 @@
     },
   ];
 
-  const columns = $derived<Column<Row>[]>([
+  const columns: Column<Row>[] = [
     {
       key: "severity",
       label: "Severidade",
@@ -183,7 +207,7 @@
       key: "fund",
       label: "Fundo",
       cell: fundCell,
-      sortBy: (row) => row.display_name,
+      sortBy: (row) => row.display_name ?? row.series_id,
     },
     {
       key: "date",
@@ -202,16 +226,10 @@
       key: "measure",
       label: "Valor / limiar",
       numeric: true,
-      class: "whitespace-nowrap",
-      value: (row) => issueMeasure(row) ?? DASH,
+      cell: measureCell,
       sortBy: issueMagnitude,
     },
-  ]);
-
-  const tableLabels = {
-    locale: "pt-BR",
-    sortLabel: (column: { label: string }) => `Ordenar por ${column.label}`,
-  };
+  ];
 </script>
 
 {#snippet ruleCard(row: RuleRow)}
@@ -250,6 +268,20 @@
   {/if}
 {/snippet}
 
+{#snippet measureCell(row: Row)}
+  {@const measure = issueMeasure(row)}
+  {#if measure === null}
+    <span class="text-base-content/70">{DASH}</span>
+  {:else}
+    <span class="block whitespace-nowrap tabular-nums">{measure.value}</span>
+    {#if measure.limit !== null}
+      <span class="text-base-content/70 block text-xs whitespace-nowrap tabular-nums">
+        {measure.limit}
+      </span>
+    {/if}
+  {/if}
+{/snippet}
+
 {#snippet issueCard(row: Row)}
   <div class="flex flex-col gap-1.5">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -264,7 +296,9 @@
 
 {#snippet noIssues()}
   <div class="flex flex-col items-center gap-2 py-8 text-center">
-    <p class="text-base-content/70 text-sm">Nenhum alerta com esse filtro.</p>
+    <p class="text-base-content/70 text-sm">
+      {filtered ? "Nenhum alerta com esse filtro." : "Nenhum alerta nesta rodada."}
+    </p>
     {#if filtered}
       <button type="button" class="btn btn-ghost btn-sm" onclick={clearFilters}>
         Limpar filtros
@@ -275,7 +309,7 @@
 
 <PageFrame
   title="Qualidade"
-  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo. As exceções são a linha zerada (descartada), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (fora de rankings e pares).`}
+  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo. As exceções são a linha zerada (descartada do cálculo), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (fora de rankings e pares).`}
   wide
 >
   <section class="flex flex-col gap-2" aria-labelledby="severity-tiles-title">
@@ -300,21 +334,25 @@
         Regras sem ocorrência hoje aparecem com zero: elas rodam em todo processamento.
       </p>
     </div>
-    <DataTable
-      rows={ruleRows}
-      columns={ruleColumns}
-      rowKey={(row) => row.rule}
-      sort={{ key: "count", direction: "desc" }}
-      label="Alertas por regra"
-      class="table-sm"
-      card={ruleCard}
-      {...tableLabels}
-    />
+    <div class="card bg-base-100 border-base-content/10 border">
+      <div class="card-body p-2 sm:p-3">
+        <DataTable
+          rows={ruleRows}
+          columns={ruleColumns}
+          rowKey={(row) => row.rule}
+          sort={{ key: "count", direction: "desc" }}
+          label="Alertas por regra"
+          class="table-sm"
+          card={ruleCard}
+          {...TABLE_LABELS}
+        />
+      </div>
+    </div>
   </section>
 
   <section class="flex flex-col gap-2" aria-labelledby="issues-title">
     <h2 id="issues-title" class="text-base font-semibold">Alertas</h2>
-    <div class="card bg-base-100 border-base-content/10 border" aria-label="Filtros dos alertas">
+    <section class="card bg-base-100 border-base-content/10 border" aria-label="Filtros dos alertas">
       <div class="card-body flex-row flex-wrap items-center gap-x-6 gap-y-3 p-4">
         <div class="flex items-center gap-2">
           <span id="rule-filter-label" class="text-sm">Regra:</span>
@@ -346,8 +384,8 @@
           />
         </div>
         <label class="input input-sm w-64 max-w-full">
-          <span class="sr-only">Buscar no texto dos alertas</span>
-          <input type="search" bind:value={query} placeholder="Buscar no texto" />
+          <span class="sr-only">Buscar no texto dos alertas, no nome ou no CNPJ da série</span>
+          <input type="search" bind:value={query} placeholder="Buscar no texto ou CNPJ" />
         </label>
         <div class="flex items-center gap-3 sm:ml-auto">
           <span class="text-sm font-medium tabular-nums" aria-live="polite">
@@ -360,7 +398,7 @@
           {/if}
         </div>
       </div>
-    </div>
+    </section>
     <div class="card bg-base-100 border-base-content/10 border">
       <div class="card-body p-2 sm:p-3">
         <DataTable
@@ -372,7 +410,7 @@
           class="table-sm"
           card={issueCard}
           empty={noIssues}
-          {...tableLabels}
+          {...TABLE_LABELS}
         />
       </div>
     </div>

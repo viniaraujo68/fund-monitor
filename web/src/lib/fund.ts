@@ -1,6 +1,9 @@
-import type { FundDetail, FundSummary, RiskRow, WindowRow } from "$lib/data/types";
+import type { FundDetail, FundSummary, IsoDate, PeerPosition, RiskRow, WindowRow } from "$lib/data/types";
+import { GENERAL_PUBLIC } from "$lib/labels";
 
 export const CDI = "cdi";
+
+export const MIN_PEERS = 5;
 
 export const findWindow = (detail: FundDetail, key: string): WindowRow | undefined =>
   detail.windows.find((row) => row.window === key);
@@ -21,3 +24,21 @@ export const monthEndIndexes = (dates: string[]): number[] =>
 
 export const difference = (left: number | null, right: number | null): number | null =>
   left === null || right === null ? null : left - right;
+
+export const hasPeerGroup = (peers: PeerPosition | null): peers is PeerPosition =>
+  peers !== null && peers.peer_count >= MIN_PEERS;
+
+export const peerGapReason = (summary: FundSummary): string => {
+  if (summary.target_audience !== GENERAL_PUBLIC) return "só para Público Geral";
+  if (summary.return_12m === null) return "menos de 12 meses de série";
+  if (summary.peer_count < MIN_PEERS) return `menos de ${MIN_PEERS} pares na classificação`;
+  return "sem grupo de pares";
+};
+
+const monthEnd = (day: IsoDate): IsoDate => {
+  const [year, month] = day.split("-").map(Number);
+  return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).toISOString().slice(0, 10);
+};
+
+export const isPartialMonth = (month: IsoDate, lastDate: IsoDate | null): boolean =>
+  lastDate !== null && lastDate.slice(0, 7) === month.slice(0, 7) && lastDate < monthEnd(month);

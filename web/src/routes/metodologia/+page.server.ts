@@ -3,5 +3,5 @@ import { renderMarkdown } from "$lib/server/markdown";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = () => ({
-  document: decisions === null ? null : renderMarkdown(decisions),
+  document: renderMarkdown(decisions),
 });

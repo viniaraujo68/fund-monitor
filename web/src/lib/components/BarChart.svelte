@@ -3,6 +3,7 @@
   import { getThemeContext } from "@viniaraujo68/plinth/theme";
   import { registerCharts } from "$lib/charts/register";
   import { readChartColors, slotColor } from "$lib/charts/theme";
+  import { DASH } from "$lib/format";
   import ChartNotice from "./ChartNotice.svelte";
 
   export interface BarSeries {
@@ -18,9 +19,6 @@
     formatValue,
     formatAxis,
     ariaLabel,
-    axisTitle,
-    height = "h-72",
-    stacked = false,
     insufficientText = "Ainda não há períodos suficientes para desenhar as barras.",
   }: {
     labels: string[];
@@ -28,9 +26,6 @@
     formatValue: (value: number) => string;
     formatAxis: (value: number) => string;
     ariaLabel: string;
-    axisTitle?: string;
-    height?: string;
-    stacked?: boolean;
     insufficientText?: string;
   } = $props();
 
@@ -45,10 +40,9 @@
     const container = host;
     const rows = labels;
     const bars = series;
-    const stack = stacked;
     void theme.dark;
 
-    if (element === undefined || container === undefined) return;
+    if (!element || !container) return;
 
     registerCharts();
     const colors = readChartColors(container);
@@ -100,29 +94,23 @@
             callbacks: {
               label: (item) =>
                 item.parsed.y === null
-                  ? ` ${item.dataset.label ?? ""}: —`
+                  ? ` ${item.dataset.label ?? ""}: ${DASH}`
                   : ` ${item.dataset.label ?? ""}: ${formatValue(item.parsed.y)}`,
             },
           },
         },
         scales: {
           x: {
-            stacked: stack,
             grid: { display: false },
             border: { color: colors.grid },
             ticks: { color: colors.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 },
           },
           y: {
-            stacked: stack,
             beginAtZero: true,
             grid: {
               color: (context) => (context.tick.value === 0 ? colors.muted : colors.grid),
             },
             border: { display: false },
-            title:
-              axisTitle === undefined
-                ? undefined
-                : { display: true, text: axisTitle, color: colors.muted },
             ticks: {
               color: colors.muted,
               maxTicksLimit: 6,
@@ -139,9 +127,9 @@
 </script>
 
 {#if drawable}
-  <div bind:this={host} class={["relative w-full", height]} role="img" aria-label={ariaLabel}>
+  <div bind:this={host} class="relative h-72 w-full" role="img" aria-label={ariaLabel}>
     <canvas bind:this={canvas}></canvas>
   </div>
 {:else}
-  <ChartNotice text={insufficientText} {height} />
+  <ChartNotice text={insufficientText} />
 {/if}

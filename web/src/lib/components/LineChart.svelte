@@ -3,13 +3,13 @@
   import { getThemeContext } from "@viniaraujo68/plinth/theme";
   import { registerCharts } from "$lib/charts/register";
   import { readChartColors, slotColor, slotPointStyle, slotSoftColor } from "$lib/charts/theme";
+  import { DASH } from "$lib/format";
   import ChartNotice from "./ChartNotice.svelte";
 
   export interface LineSeries {
     label: string;
     data: (number | null)[];
     slot: number;
-    dashed?: boolean;
   }
 
   const {
@@ -19,8 +19,6 @@
     formatAxis,
     ariaLabel,
     axisTitle,
-    height = "h-72",
-    points = true,
     fill = false,
     max,
     insufficientText = "Ainda não há pontos suficientes para desenhar a linha.",
@@ -28,11 +26,9 @@
     labels: string[];
     series: LineSeries[];
     formatValue: (value: number) => string;
-    formatAxis: (value: number) => string;
+    formatAxis: (value: number, step: number) => string;
     ariaLabel: string;
     axisTitle?: string;
-    height?: string;
-    points?: boolean;
     fill?: boolean;
     max?: number;
     insufficientText?: string;
@@ -42,6 +38,12 @@
   let canvas = $state<HTMLCanvasElement>();
   let host = $state<HTMLDivElement>();
 
+  const tickStep = (ticks: { value: number }[]): number =>
+    ticks.slice(1).reduce((step, tick, index) => {
+      const gap = Math.abs(tick.value - (ticks[index]?.value ?? tick.value));
+      return gap > 0 && (step === 0 || gap < step) ? gap : step;
+    }, 0);
+
   const drawable = $derived(labels.length >= 2 && series.length > 0);
 
   $effect(() => {
@@ -49,12 +51,11 @@
     const container = host;
     const rows = labels;
     const lines = series;
-    const withPoints = points;
     const withFill = fill;
     const ceiling = max;
     void theme.dark;
 
-    if (element === undefined || container === undefined) return;
+    if (!element || !container) return;
 
     registerCharts();
     const colors = readChartColors(container);
@@ -72,16 +73,15 @@
             : slotColor(colors, entry.slot),
           fill: withFill ? "origin" : false,
           borderWidth: 2,
-          borderDash: entry.dashed === true ? [6, 4] : [],
           tension: 0,
           spanGaps: true,
           pointStyle: slotPointStyle(entry.slot),
-          pointRadius: withPoints ? 4 : 0,
-          pointHoverRadius: withPoints ? 6 : 4,
+          pointRadius: 0,
+          pointHoverRadius: 4,
           pointBorderColor: colors.surface,
-          pointBorderWidth: withPoints ? 2 : 1,
+          pointBorderWidth: 1,
           pointHoverBackgroundColor: slotColor(colors, entry.slot),
-          pointHitRadius: withPoints ? 12 : 6,
+          pointHitRadius: 6,
         })),
       },
       options: {
@@ -103,8 +103,6 @@
             },
           },
           tooltip: {
-            mode: "index",
-            intersect: false,
             backgroundColor: colors.surface,
             titleColor: colors.ink,
             bodyColor: colors.ink,
@@ -115,7 +113,7 @@
             callbacks: {
               label: (item) =>
                 item.parsed.y === null
-                  ? ` ${item.dataset.label ?? ""}: —`
+                  ? ` ${item.dataset.label ?? ""}: ${DASH}`
                   : ` ${item.dataset.label ?? ""}: ${formatValue(item.parsed.y)}`,
             },
           },
@@ -129,7 +127,7 @@
               maxRotation: 0,
               autoSkip: true,
               autoSkipPadding: 16,
-              maxTicksLimit: withPoints ? undefined : 8,
+              maxTicksLimit: 8,
             },
           },
           y: {
@@ -143,7 +141,7 @@
             ticks: {
               color: colors.muted,
               maxTicksLimit: 5,
-              callback: (value) => formatAxis(Number(value)),
+              callback: (value, _index, ticks) => formatAxis(Number(value), tickStep(ticks)),
             },
           },
         },
@@ -156,9 +154,9 @@
 </script>
 
 {#if drawable}
-  <div bind:this={host} class={["relative w-full", height]} role="img" aria-label={ariaLabel}>
+  <div bind:this={host} class="relative h-72 w-full" role="img" aria-label={ariaLabel}>
     <canvas bind:this={canvas}></canvas>
   </div>
 {:else}
-  <ChartNotice text={insufficientText} {height} />
+  <ChartNotice text={insufficientText} />
 {/if}

@@ -35,7 +35,7 @@
       class: "whitespace-nowrap",
       value: (row) => windowLabel(row.window),
     },
-    { key: "period", label: "Período", sortable: false, cell: periodCell },
+    { key: "period", label: "Período", sortable: false, cell: periodText },
     ...metrics.map((metric) => ({
       key: metric.key,
       label: metric.label,
@@ -59,10 +59,6 @@
       </span>
     {/if}
   {/if}
-{/snippet}
-
-{#snippet periodCell(row: WindowRow)}
-  {@render periodText(row)}
 {/snippet}
 
 {#snippet windowCard(row: WindowRow)}
@@ -91,7 +87,7 @@
     <div class="flex flex-col gap-1">
       <h2 id="windows-title" class="text-base font-semibold">Janelas de retorno</h2>
       <p class="text-base-content/70 text-xs">
-        Janelas menores que 12 meses não são anualizadas. Excesso sobre o CDI é a diferença entre os
+        Janelas menores que 12 meses não são anualizadas nem têm % do CDI. Excesso sobre o CDI é a diferença entre os
         retornos do fundo e do CDI na mesma janela.
       </p>
     </div>

@@ -1,9 +1,12 @@
 <script lang="ts">
-  import type { PeerPosition } from "$lib/data/types";
+  import type { FundSummary, PeerPosition } from "$lib/data/types";
+  import { hasPeerGroup, MIN_PEERS, peerGapReason } from "$lib/fund";
   import { integer, percent2 } from "$lib/format";
   import PeerBand from "./PeerBand.svelte";
 
-  const { peers }: { peers: PeerPosition | null } = $props();
+  const { peers, summary }: { peers: PeerPosition | null; summary: FundSummary } = $props();
+
+  const group = $derived(hasPeerGroup(peers) ? peers : null);
 
   const METRICS = [
     {
@@ -27,10 +30,10 @@
   ];
 
   const rows = $derived(
-    peers === null
+    group === null
       ? []
       : METRICS.flatMap((entry) => {
-          const metric = peers.metrics[entry.key];
+          const metric = group.metrics[entry.key];
           return metric === undefined ? [] : [{ ...entry, metric }];
         }),
   );
@@ -38,16 +41,16 @@
 
 <section class="card bg-base-100 border-base-content/10 border" aria-labelledby="peers-title">
   <div class="card-body gap-4 p-4 sm:p-5">
-    {#if peers === null}
+    {#if group === null}
       <h2 id="peers-title" class="text-base font-semibold">Posição entre pares</h2>
       <p class="text-base-content/70 text-sm">
-        Sem grupo de pares: só séries de Público Geral com pelo menos 5 pares da mesma classificação
-        ANBIMA entram na comparação.
+        Sem grupo de pares: {peerGapReason(summary)}. Entram na comparação séries de Público Geral
+        com 12 meses de histórico e pelo menos {MIN_PEERS} pares da mesma classificação ANBIMA.
       </p>
     {:else}
       <div class="flex flex-col gap-1">
         <h2 id="peers-title" class="text-base font-semibold">
-          Entre {integer(peers.peer_count)} pares de {peers.anbima_classification} · {peers.target_audience}
+          Entre {integer(group.peer_count)} pares de {group.anbima_classification} · {group.target_audience}
         </h2>
         <p class="text-base-content/70 text-xs">
           Janela de 12 meses. A barra marca a faixa central dos pares (P25 a P75) e o traço, a

@@ -10,6 +10,7 @@
   import QualityStrip from "$lib/components/QualityStrip.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
   import type { FundSummary } from "$lib/data/types";
+  import { isPartialMonth, MIN_PEERS } from "$lib/fund";
   import {
     DASH,
     date,
@@ -21,7 +22,16 @@
     percent2,
     ratio2,
   } from "$lib/format";
-  import { ALL, AUDIENCES, CLASSIFICATIONS } from "$lib/labels";
+  import {
+    ALL,
+    AUDIENCES,
+    CLASSIFICATIONS,
+    GENERAL_PUBLIC,
+    SEVERITIES,
+    severityCountWord,
+  } from "$lib/labels";
+  import { TABLE_LABELS } from "$lib/table";
+  import type { Snapshot } from "./$types";
 
   const { data } = $props();
 
@@ -40,10 +50,27 @@
     ...CLASSIFICATIONS.map((classification) => ({ value: classification, label: classification })),
   ];
 
-  let audience = $state<Audience>("Público Geral");
+  interface Filters {
+    audience: Audience;
+    includeStructural: boolean;
+    includeExclusive: boolean;
+    classification: string | null;
+  }
+
+  let audience = $state<Audience>(GENERAL_PUBLIC);
   let includeStructural = $state(false);
   let includeExclusive = $state(false);
   let classification = $state<string | null>(ALL);
+
+  export const snapshot: Snapshot<Filters> = {
+    capture: () => ({ audience, includeStructural, includeExclusive, classification }),
+    restore: (filters) => {
+      audience = filters.audience;
+      includeStructural = filters.includeStructural;
+      includeExclusive = filters.includeExclusive;
+      classification = filters.classification;
+    },
+  };
 
   const scope = $derived<Scope>(includeExclusive ? "manager" : "monitored");
 
@@ -116,7 +143,7 @@
 
   const lastMonth = $derived(months.at(-1));
   const partialMonth = $derived(
-    lastMonth !== undefined && lastMonth.slice(0, 7) === data.meta.as_of.slice(0, 7),
+    lastMonth !== undefined && isPartialMonth(lastMonth, data.meta.as_of),
   );
 
   const flowNote = $derived(
@@ -124,7 +151,7 @@
       includeExclusive
         ? "Todas as séries da gestora, inclusive exclusivas."
         : "Séries não exclusivas da gestora.",
-      "Não segue os filtros de público e classificação.",
+      "Não segue os filtros de público, classificação e veículos estruturais.",
       partialMonth && lastMonth !== undefined
         ? `${monthLabel(lastMonth)} parcial, até ${date(data.meta.as_of)}.`
         : null,
@@ -139,9 +166,11 @@
       : fund.issues.high * 1000 + fund.issues.medium;
 
   const alertTitle = (fund: FundSummary): string =>
-    `${integer(fund.issues.high)} alta, ${integer(fund.issues.medium)} média, ${integer(fund.issues.low)} baixa, ${integer(fund.issues.info)} informativo`;
+    SEVERITIES.map(
+      (level) => `${integer(fund.issues[level])} ${severityCountWord(level, fund.issues[level])}`,
+    ).join(", ");
 
-  const columns = $derived<Column<FundSummary>[]>([
+  const columns: Column<FundSummary>[] = [
     {
       key: "display_name",
       label: "Nome",
@@ -250,7 +279,7 @@
       cell: alertsCell,
       sortBy: alertRank,
     },
-  ]);
+  ];
 </script>
 
 {#snippet nameCell(fund: FundSummary)}
@@ -288,10 +317,16 @@
   {:else}
     <span class="inline-flex flex-wrap justify-end gap-1" title={alertTitle(fund)}>
       {#if fund.issues.high > 0}
-        <span class="badge badge-error badge-sm tabular-nums">{integer(fund.issues.high)}</span>
+        <span class="badge badge-error badge-sm tabular-nums">
+          {integer(fund.issues.high)}
+          {severityCountWord("high", fund.issues.high)}
+        </span>
       {/if}
       {#if fund.issues.medium > 0}
-        <span class="badge badge-warning badge-sm tabular-nums">{integer(fund.issues.medium)}</span>
+        <span class="badge badge-warning badge-sm tabular-nums">
+          {integer(fund.issues.medium)}
+          {severityCountWord("medium", fund.issues.medium)}
+        </span>
       {/if}
     </span>
   {/if}
@@ -455,7 +490,8 @@
       <h2 id="funds-table-title" class="text-base font-semibold">Fundos</h2>
       <p class="text-base-content/70 text-xs">
         Janela de 12 meses até {date(data.meta.as_of)}. Pares: percentil do retorno 12m entre fundos
-        da mesma classificação ANBIMA e público. * captação com janela parcial.
+        de Público Geral da mesma classificação ANBIMA, com pelo menos {MIN_PEERS} pares; os outros públicos
+        não têm pares. * captação com janela parcial.
       </p>
     </div>
     <div class="card bg-base-100 border-base-content/10 border">
@@ -465,16 +501,11 @@
           {columns}
           rowKey={(fund) => fund.series_id}
           sort={{ key: "net_assets", direction: "desc" }}
-          locale="pt-BR"
           label="Resumo dos fundos"
-          sortLabel={(column) => `Ordenar por ${column.label}`}
-          columnsLabel="Colunas"
-          resetColumnsLabel="Restaurar colunas"
-          moveColumnLabel={(column, direction) =>
-            `Mover ${column.label} para ${direction === "up" ? "cima" : "baixo"}`}
           class="table-sm"
           card={fundCard}
           empty={noFunds}
+          {...TABLE_LABELS}
         />
       </div>
     </div>

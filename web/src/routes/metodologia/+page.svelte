@@ -6,43 +6,39 @@
   const rendered = $derived(data.document);
 </script>
 
+{#snippet article()}
+  <article class="methodology card bg-base-100 border-base-content/10 min-w-0 border p-4 sm:p-6">
+    {@html rendered.html}
+  </article>
+{/snippet}
+
 <PageFrame
   title="Metodologia"
   description="Decisões de método: fontes, universo, cálculos, pares e regras de qualidade."
   wide
 >
-  {#if rendered === null}
-    <section class="card bg-base-100 border-base-content/10 border">
-      <div class="card-body p-6 text-center">
-        <p class="text-base-content/70 text-sm">Metodologia em elaboração.</p>
-      </div>
-    </section>
-  {:else}
+  {#if rendered.headings.length > 0}
     <div class="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      {#if rendered.headings.length > 0}
-        <nav aria-labelledby="index-title" class="lg:sticky lg:top-4 lg:self-start">
-          <div class="card bg-base-100 border-base-content/10 border">
-            <div class="card-body gap-2 p-4">
-              <h2 id="index-title" class="text-sm font-semibold">Nesta página</h2>
-              <ol class="flex flex-col gap-1 text-sm">
-                {#each rendered.headings as heading (heading.id)}
-                  <li>
-                    <a class="link link-hover text-base-content/80 block py-0.5" href={`#${heading.id}`}>
-                      {heading.text}
-                    </a>
-                  </li>
-                {/each}
-              </ol>
-            </div>
+      <nav aria-labelledby="index-title" class="lg:sticky lg:top-4 lg:self-start">
+        <div class="card bg-base-100 border-base-content/10 border">
+          <div class="card-body gap-2 p-4">
+            <h2 id="index-title" class="text-sm font-semibold">Nesta página</h2>
+            <ol class="flex flex-col gap-1 text-sm">
+              {#each rendered.headings as heading (heading.id)}
+                <li>
+                  <a class="link link-hover text-base-content/80 block py-0.5" href={`#${heading.id}`}>
+                    {heading.text}
+                  </a>
+                </li>
+              {/each}
+            </ol>
           </div>
-        </nav>
-      {/if}
-      <article
-        class="methodology card bg-base-100 border-base-content/10 min-w-0 border p-4 sm:p-6 lg:col-start-2"
-      >
-        {@html rendered.html}
-      </article>
+        </div>
+      </nav>
+      {@render article()}
     </div>
+  {:else}
+    {@render article()}
   {/if}
 </PageFrame>
 

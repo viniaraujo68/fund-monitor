@@ -1,7 +1,3 @@
-const decisionFiles = import.meta.glob<string>("$docs/DECISIONS.md", {
-  eager: true,
-  query: "?raw",
-  import: "default",
-});
+import decisionsSource from "$docs/DECISIONS.md?raw";
 
-export const decisions: string | null = Object.values(decisionFiles)[0] ?? null;
+export const decisions: string = decisionsSource;

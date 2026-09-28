@@ -2,7 +2,7 @@
   import { benchmarkSlot, FUND_SLOT } from "$lib/charts/palette";
   import type { FundDetail } from "$lib/data/types";
   import { monthEndIndexes } from "$lib/fund";
-  import { DASH, date, integer, monthLabel, ratio2 } from "$lib/format";
+  import { axisNumber, DASH, date, monthLabel, ratio2 } from "$lib/format";
   import { benchmarkLabel, benchmarkList } from "$lib/labels";
   import ChartCard from "./ChartCard.svelte";
   import LineChart, { type LineSeries } from "./LineChart.svelte";
@@ -46,38 +46,43 @@
       labels={dates.map(date)}
       series={lines}
       formatValue={ratio2}
-      formatAxis={integer}
+      formatAxis={axisNumber}
       axisTitle="base 100"
-      points={false}
       ariaLabel={`Retorno acumulado de ${summary.display_name} contra ${benchmarkList(benchmarks)}, base 100, de ${date(first)} a ${date(last)}`}
       insufficientText="A série ainda não tem pontos suficientes para desenhar o retorno acumulado."
     />
   {/snippet}
   {#snippet table()}
-    <table class="table-sm table">
-      <caption class="sr-only">Retorno acumulado no fim de cada mês, base 100</caption>
-      <thead>
-        <tr>
-          <th scope="col">Mês</th>
-          <th scope="col" class="text-right">Fundo</th>
-          {#each benchmarks as benchmark (benchmark)}
-            <th scope="col" class="text-right">{benchmarkLabel(benchmark)}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each monthEnds as index (index)}
+    {#if monthEnds.length === 0}
+      <p class="text-base-content/70 py-6 text-center text-sm">
+        A série ainda não tem cotas para montar a tabela.
+      </p>
+    {:else}
+      <table class="table-sm table">
+        <caption class="sr-only">Retorno acumulado no fim de cada mês, base 100</caption>
+        <thead>
           <tr>
-            <th scope="row" class="font-normal" title={date(dates[index])}>
-              {monthLabel(dates[index] ?? "")}
-            </th>
-            <td class="text-right tabular-nums">{valueAt("fund", index)}</td>
+            <th scope="col">Mês</th>
+            <th scope="col" class="text-right">Fundo</th>
             {#each benchmarks as benchmark (benchmark)}
-              <td class="text-right tabular-nums">{valueAt(benchmark, index)}</td>
+              <th scope="col" class="text-right">{benchmarkLabel(benchmark)}</th>
             {/each}
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each monthEnds as index (index)}
+            <tr>
+              <th scope="row" class="font-normal" title={date(dates[index])}>
+                {monthLabel(dates[index] ?? "")}
+              </th>
+              <td class="text-right tabular-nums">{valueAt("fund", index)}</td>
+              {#each benchmarks as benchmark (benchmark)}
+                <td class="text-right tabular-nums">{valueAt(benchmark, index)}</td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
   {/snippet}
 </ChartCard>

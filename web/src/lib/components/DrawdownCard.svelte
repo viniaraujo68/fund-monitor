@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DRAWDOWN_SLOT } from "$lib/charts/palette";
   import type { FundDetail, RiskRow } from "$lib/data/types";
-  import { DASH, date, integer, percent2, percentShort } from "$lib/format";
+  import { axisPercent, DASH, date, integer, percent2 } from "$lib/format";
   import { windowLabel } from "$lib/labels";
   import ChartCard from "./ChartCard.svelte";
   import ChartNotice from "./ChartNotice.svelte";
@@ -43,9 +43,8 @@
         labels={dates.map(date)}
         series={[{ label: "Drawdown", slot: DRAWDOWN_SLOT, data: values }]}
         formatValue={percent2}
-        formatAxis={percentShort}
+        formatAxis={axisPercent}
         fill
-        points={false}
         max={0}
         ariaLabel={`Drawdown de ${detail.summary.display_name} de ${date(dates[0])} a ${date(dates.at(-1))}`}
         insufficientText="A série ainda não tem pontos suficientes para desenhar o drawdown."

@@ -30,13 +30,13 @@
 {/snippet}
 
 <PageFrame title={summary.display_name} description={summary.class_name} {header}>
-  <FundRegistry {summary} />
+  <FundRegistry {summary} windowStart={data.meta.window_start} />
   <FundTiles {detail} />
   <CumulativeReturnCard {detail} />
   <ReturnWindowsTable {detail} />
   <DrawdownCard {detail} />
   <MonthlyFlowCard {detail} />
-  <PeerPositionCard peers={detail.peers} />
+  <PeerPositionCard peers={detail.peers} {summary} />
   <IssueList issues={detail.issues} />
   <p class="text-base-content/70 text-xs">
     Fonte: CVM (cadastro e informe diário), Bacen SGS, ANBIMA, B3. Dados até {date(data.meta.as_of)}.

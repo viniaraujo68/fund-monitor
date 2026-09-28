@@ -2,14 +2,26 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
 
+  const FALLBACK_MESSAGE = "O site encontrou um problema inesperado.";
+  const DEFAULT_MESSAGE = /^(Not Found|Internal Error|Error: \d+)$/;
+
   const notFound = $derived(page.status === 404);
+  const heading = $derived(notFound ? "Página não encontrada" : "Algo deu errado");
+  const message = $derived.by(() => {
+    const text = page.error?.message?.trim() ?? "";
+    return text === "" || DEFAULT_MESSAGE.test(text) ? FALLBACK_MESSAGE : text;
+  });
 </script>
 
 <svelte:head>
-  <title>{notFound ? "Página não encontrada" : "Algo deu errado"} · Monitor de fundos</title>
+  <title>{heading} · Monitor de fundos</title>
 </svelte:head>
 
-<div class="flex h-full w-full flex-col items-center justify-center gap-2 p-8 text-center">
+<div
+  id="conteudo"
+  tabindex="-1"
+  class="flex h-full w-full flex-col items-center justify-center gap-2 p-8 text-center outline-none"
+>
   <svg
     class="text-base-content/40 size-12"
     viewBox="0 0 24 24"
@@ -32,15 +44,13 @@
   <p class="text-base-content/70 text-xs font-medium tracking-widest uppercase">
     Erro {page.status}
   </p>
-  <h1 class="text-xl font-semibold">
-    {notFound ? "Página não encontrada" : "Algo deu errado"}
-  </h1>
+  <h1 class="text-xl font-semibold">{heading}</h1>
   <p class="text-base-content/70 max-w-md text-sm">
     {#if notFound}
       O endereço <span class="font-mono break-all">{page.url.pathname}</span> não existe ou mudou de
       lugar.
     {:else}
-      {page.error?.message ?? "O site encontrou um problema inesperado."}
+      {message}
     {/if}
   </p>
   <div class="mt-4 flex flex-wrap justify-center gap-2">

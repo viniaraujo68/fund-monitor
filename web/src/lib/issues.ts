@@ -3,13 +3,13 @@ import { date, integer, monthName, percent2, percentShort } from "$lib/format";
 import { sourceLabel } from "$lib/labels";
 
 export const RULE_LABELS: Record<string, string> = {
-  zero_values: "Valores zerados",
-  duplicate_report: "Informe duplicado",
-  quota_jump: "Salto de cota",
-  unexplained_net_assets: "PL sem explicação",
   missing_report: "Dia sem informe",
-  short_history: "Histórico curto",
+  quota_jump: "Salto de cota",
   repeated_quota: "Cota repetida",
+  unexplained_net_assets: "PL sem explicação",
+  zero_values: "Valores zerados",
+  short_history: "Histórico curto",
+  duplicate_report: "Informe duplicado",
   stale_source: "Fonte atrasada",
   registry_mismatch: "Cadastro divergente",
 };
@@ -25,52 +25,57 @@ export interface RuleDescription {
 }
 
 export const RULE_DESCRIPTIONS: Record<string, RuleDescription> = {
-  zero_values: {
-    detects: "Informe publicado com cota, PL ou número de cotistas zerado.",
-    threshold: "cota ≤ 0, PL ≤ 0 ou nenhum cotista",
-    severity: "Alta",
-  },
-  duplicate_report: {
-    detects: "Mais de um informe da mesma série no mesmo dia, com valores diferentes.",
-    threshold: "2 ou mais informes no dia com algum valor divergente",
-    severity: "Média",
+  missing_report: {
+    detects: "Dia útil sem informe depois do início da série.",
+    threshold: "qualquer dia útil sem informe",
+    severity: "Baixa; média a partir de 5 dias úteis seguidos",
   },
   quota_jump: {
     detects: "Variação diária da cota fora do padrão recente da série.",
     threshold: "5σ em 60 dias e ≥ 0,1 % da cota; 3 % absoluto em RF",
     severity: "Média; informativo quando ≥ 10 % da classe salta no mesmo dia",
   },
+  repeated_quota: {
+    detects: "Mesma cota em informes seguidos, sinal de cota não atualizada.",
+    threshold: "3 ou mais informes seguidos",
+    severity: "Média",
+  },
   unexplained_net_assets: {
     detects: "Variação mensal do PL que captação líquida e rentabilidade não explicam.",
     threshold: "resíduo > 1 % do PL do início do mês",
     severity: "Média",
   },
-  missing_report: {
-    detects: "Dia útil sem informe depois do início da série.",
-    threshold: "qualquer dia útil sem informe",
-    severity: "Baixa; média a partir de 5 dias úteis seguidos",
+  zero_values: {
+    detects: "Informe publicado com cota, PL ou número de cotistas zerado.",
+    threshold: "cota ≤ 0, PL ≤ 0 ou nenhum cotista",
+    severity: "Alta",
   },
   short_history: {
     detects: "Série com menos de 12 meses, fora de rankings e pares.",
     threshold: "sem retorno na janela de 12 meses",
     severity: "Informativo",
   },
-  repeated_quota: {
-    detects: "Mesma cota em informes seguidos, sinal de cota não atualizada.",
-    threshold: "3 ou mais informes seguidos",
+  duplicate_report: {
+    detects: "Mais de um informe da mesma série no mesmo dia, com valores diferentes.",
+    threshold: "2 ou mais informes no dia com algum valor divergente",
     severity: "Média",
   },
   stale_source: {
-    detects: "Fonte de dados sem atualização recente.",
-    threshold: "atraso > 2 dias úteis no informe CVM, > 1 nos índices",
-    severity: "Média; alta com 3 dias úteis além da tolerância ou sem dado",
+    detects: "Fonte de dados sem atualização recente, contada em dias de semana (sem descontar feriados).",
+    threshold: "atraso > 2 dias de semana no informe CVM, > 1 nos índices",
+    severity: "Média; alta com mais de 3 dias de semana além da tolerância ou sem dado",
   },
   registry_mismatch: {
-    detects: "Série no cadastro sem informe, ou informe de série fora do cadastro.",
+    detects: "Série no cadastro sem informe, ou informe de série fora do cadastro ou inativa nele.",
     threshold: "qualquer divergência",
     severity: "Média",
   },
 };
+
+const JUMP_FLOOR = 0.001;
+const FLOOR_TOLERANCE = 1e-9;
+
+const PLURAL_FIELDS = new Set(["inflows", "outflows", "shareholders"]);
 
 const FIELD_WORDS: Record<string, string> = {
   quota: "cota",
@@ -108,6 +113,8 @@ const plural = (count: number, singular: string, pluralForm: string): string =>
 
 const businessDays = (count: number): string => plural(count, "dia útil", "dias úteis");
 
+const weekdays = (count: number): string => plural(count, "dia de semana", "dias de semana");
+
 const detailPart = (detail: string | null, prefix: string): string | null => {
   const part = (detail ?? "")
     .split(";")
@@ -132,24 +139,50 @@ const duplicateReport = (issue: Issue): string => {
     .filter((type) => type !== "");
   const differing = splitFields(detailPart(issue.detail, "differing:"));
   const typesPart = types.length === 0 ? "" : ` (${listFormat.format(types)})`;
+  const singular = differing.length === 1 && !PLURAL_FIELDS.has(differing[0] ?? "");
   const differingPart =
-    differing.length === 0 ? " com valores diferentes" : ` com ${fieldList(differing)} diferentes`;
+    differing.length === 0
+      ? " com valores diferentes"
+      : ` com ${fieldList(differing)} ${singular ? "diferente" : "diferentes"}`;
   return `${countWord} informes em ${date(issue.date)}${typesPart}${differingPart}.`;
 };
 
+type JumpLimit = "absolute" | "floor" | "sigma";
+
+const jumpFlags = (issue: Issue): string[] =>
+  (issue.detail ?? "").split(";").map((flag) => flag.trim());
+
+const jumpLimit = (issue: Issue): JumpLimit => {
+  if (jumpFlags(issue).includes("absolute")) return "absolute";
+  return issue.threshold === null || issue.threshold <= JUMP_FLOOR + FLOOR_TOLERANCE ? "floor" : "sigma";
+};
+
+const jumpThreshold = (issue: Issue): number | null =>
+  jumpLimit(issue) === "floor" ? Math.max(issue.threshold ?? 0, JUMP_FLOOR) : issue.threshold;
+
+const JUMP_LIMIT_NAMES: Record<JumpLimit, string> = {
+  absolute: "absoluto",
+  floor: "piso",
+  sigma: "5σ",
+};
+
 const quotaJump = (issue: Issue): string => {
-  const flags = (issue.detail ?? "").split(";").map((flag) => flag.trim());
-  const limit = flags.includes("absolute")
-    ? `acima do limite de ${percentShort(0.03)} para renda fixa`
-    : `desvio da média de 60 dias acima de ${percentShort(issue.threshold)} (5 desvios-padrão)`;
-  const market = flags.includes("market-wide") ? "; movimento compartilhado pelo mercado" : "";
-  return `Variação de ${percent2(issue.value)} na cota em ${date(issue.date)}, ${limit}${market}.`;
+  const threshold = percentShort(jumpThreshold(issue));
+  const limits: Record<JumpLimit, string> = {
+    absolute: `acima do limite absoluto de ${threshold} para renda fixa`,
+    floor: `desvio da média de 60 dias acima do piso de ${threshold}`,
+    sigma: `desvio da média de 60 dias acima de ${threshold} (5 desvios-padrão)`,
+  };
+  const market = jumpFlags(issue).includes("market-wide")
+    ? "; movimento compartilhado pelo mercado"
+    : "";
+  return `Variação de ${percent2(issue.value)} na cota em ${date(issue.date)}, ${limits[jumpLimit(issue)]}${market}.`;
 };
 
 const unexplainedNetAssets = (issue: Issue): string => {
-  const month = issue.date === null ? "no mês" : `Em ${monthName(issue.date)}`;
+  const month = issue.date === null ? "No mês" : `Em ${monthName(issue.date)}`;
   const magnitude = issue.value === null ? null : Math.abs(issue.value);
-  return `${capitalize(month)} o PL variou ${percent2(magnitude)} além do que captação e rentabilidade explicam (limite ${percentShort(issue.threshold)}).`;
+  return `${month} o PL variou ${percent2(magnitude)} além do que captação e rentabilidade explicam (limite ${percentShort(issue.threshold)} do PL do início do mês).`;
 };
 
 const missingReport = (issue: Issue): string => {
@@ -173,8 +206,8 @@ const staleSource = (issue: Issue): string => {
   const source = issue.detail === null ? "Fonte" : sourceLabel(issue.detail);
   if (issue.date === null) return `${source} sem nenhuma data disponível.`;
   const notes = [
-    issue.days === null ? null : `${businessDays(issue.days)} de atraso`,
-    issue.threshold === null ? null : `tolerância de ${businessDays(issue.threshold)}`,
+    issue.days === null ? null : `${weekdays(issue.days)} de atraso`,
+    issue.threshold === null ? null : `tolerância de ${weekdays(issue.threshold)}`,
   ].filter((note) => note !== null);
   const suffix = notes.length === 0 ? "" : ` (${notes.join("; ")})`;
   return `${source} com dados até ${date(issue.date)}, esperado até ${date(issue.end_date)}${suffix}.`;
@@ -183,10 +216,12 @@ const staleSource = (issue: Issue): string => {
 const registryMismatch = (issue: Issue): string => {
   if (issue.detail === "registered but never reported")
     return "Série no cadastro da CVM sem nenhum informe diário publicado.";
-  if (issue.detail === "reported but not registered") {
-    const count = issue.days === null ? "" : ` (${plural(issue.days, "informe", "informes")})`;
-    return `Informes publicados de ${date(issue.date)} a ${date(issue.end_date)}${count} para série ausente do cadastro da CVM.`;
-  }
+  const count = issue.days === null ? "" : ` (${plural(issue.days, "informe", "informes")})`;
+  const span = `de ${date(issue.date)} a ${date(issue.end_date)}${count}`;
+  if (issue.detail === "reported but not registered")
+    return `Informes publicados ${span} para série ausente do cadastro da CVM.`;
+  if (issue.detail === "reported but not active")
+    return `Informes publicados ${span} para série que o cadastro da CVM não lista como ativa.`;
   return "Divergência entre o cadastro da CVM e o informe diário.";
 };
 
@@ -197,13 +232,13 @@ const fallback = (issue: Issue): string => {
 };
 
 const BUILDERS: Record<string, (issue: Issue) => string> = {
-  zero_values: zeroValues,
-  duplicate_report: duplicateReport,
-  quota_jump: quotaJump,
-  unexplained_net_assets: unexplainedNetAssets,
   missing_report: missingReport,
-  short_history: shortHistory,
+  quota_jump: quotaJump,
   repeated_quota: repeatedQuota,
+  unexplained_net_assets: unexplainedNetAssets,
+  zero_values: zeroValues,
+  short_history: shortHistory,
+  duplicate_report: duplicateReport,
   stale_source: staleSource,
   registry_mismatch: registryMismatch,
 };
@@ -217,10 +252,29 @@ export const issueSpan = (issue: Issue): string =>
 
 const RATIO_RULES = new Set(["quota_jump", "unexplained_net_assets"]);
 
-export const issueMeasure = (issue: Issue): string | null => {
+export interface IssueMeasure {
+  value: string;
+  limit: string | null;
+}
+
+export const issueMeasure = (issue: Issue): IssueMeasure | null => {
   if (!RATIO_RULES.has(issue.rule) || issue.value === null) return null;
-  const value = percent2(issue.value);
-  return issue.threshold === null ? value : `${value} / ${percent2(issue.threshold)}`;
+  if (issue.rule === "quota_jump") {
+    const threshold = jumpThreshold(issue);
+    const limit = jumpLimit(issue);
+    const subject = limit === "absolute" ? "limite" : "limite do desvio";
+    return {
+      value: `retorno de ${percent2(issue.value)}`,
+      limit:
+        threshold === null
+          ? null
+          : `${subject} ${percent2(threshold)} (${JUMP_LIMIT_NAMES[limit]})`,
+    };
+  }
+  return {
+    value: `resíduo de ${percent2(issue.value)}`,
+    limit: issue.threshold === null ? null : `limite ${percent2(issue.threshold)}`,
+  };
 };
 
 export const issueMagnitude = (issue: Issue): number | null =>

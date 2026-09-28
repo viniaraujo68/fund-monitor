@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FundDetail, RiskRow } from "$lib/data/types";
-  import { findRisk, findWindow, hasHistory } from "$lib/fund";
+  import { findRisk, findWindow, hasHistory, hasPeerGroup, peerGapReason } from "$lib/fund";
   import { date, integer, money, moneyCompact, peerRank, percent2, ratio2 } from "$lib/format";
   import { benchmarkLabel } from "$lib/labels";
   import StatTile from "./StatTile.svelte";
@@ -93,7 +93,7 @@
     <StatTile
       label="Posição entre pares"
       value={peerRank(detail.peers?.metrics.fund_return?.percentile, detail.peers?.peer_count ?? 0)}
-      hint={detail.peers === null ? "sem grupo de pares" : "percentil do retorno 12m"}
+      hint={hasPeerGroup(detail.peers) ? "percentil do retorno 12m" : peerGapReason(summary)}
     />
   </div>
 </section>

@@ -48,7 +48,9 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 export const CLASSIFICATIONS = ["Renda Fixa", "Multimercado", "Ações"] as const;
 
-export const AUDIENCES = ["Público Geral", "Qualificado", "Profissional"] as const;
+export const GENERAL_PUBLIC = "Público Geral";
+
+export const AUDIENCES = [GENERAL_PUBLIC, "Qualificado", "Profissional"] as const;
 
 export const ALL = "all";
 

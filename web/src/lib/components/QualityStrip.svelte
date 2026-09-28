@@ -18,6 +18,7 @@
 <section aria-labelledby="quality-strip-title">
   <a
     href={resolve("/qualidade")}
+    aria-label="Qualidade dos dados: ver alertas"
     class="card bg-base-100 border-base-content/10 hover:border-base-content/30 focus-visible:outline-primary block border transition-colors"
   >
     <div
@@ -29,14 +30,19 @@
         </h2>
         <p class="text-base-content/70 text-xs">
           Último dia completo do informe diário · gerado em {datetime(meta.generated_at)} ·
-          {integer(meta.quality.checked_series)} séries · {integer(meta.quality.checked_days)} dias verificados
+          {integer(meta.quality.checked_series)} séries · {integer(meta.quality.checked_days)} pares série × dia útil verificados
         </p>
         <SourceDates sources={meta.sources} class="text-base-content/70 text-xs" />
       </div>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <ul class="flex flex-wrap items-center gap-1.5" aria-label="Alertas de qualidade por severidade">
           {#each severities as entry (entry.severity)}
-            <li class={["badge badge-sm tabular-nums", SEVERITY_BADGE_CLASS[entry.severity]]}>
+            <li
+              class={[
+                "badge badge-sm tabular-nums",
+                entry.count > 0 && SEVERITY_BADGE_CLASS[entry.severity],
+              ]}
+            >
               {integer(entry.count)}
               {severityCountWord(entry.severity, entry.count)}
             </li>

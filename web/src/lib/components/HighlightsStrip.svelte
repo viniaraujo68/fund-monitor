@@ -1,11 +1,9 @@
 <script lang="ts">
   import { resolve } from "$app/paths";
   import { INFLOW_SLOT, OUTFLOW_SLOT } from "$lib/charts/palette";
-  import HorizontalBarChart, {
-    type HorizontalBar,
-  } from "$lib/components/HorizontalBarChart.svelte";
   import { date, integer, moneyCompact, peerRank, percent2 } from "$lib/format";
   import type { FlowHighlight, HighlightFund, Highlights } from "$lib/highlights";
+  import HorizontalBarChart, { type HorizontalBar } from "./HorizontalBarChart.svelte";
 
   const { highlights }: { highlights: Highlights } = $props();
 
@@ -15,38 +13,43 @@
     "M12 17h.01",
   ];
 
-  const flowBars = (flow: FlowHighlight, sign: 1 | -1): HorizontalBar[] =>
+  const UNIVERSE_SCOPE = "Público Geral, sem veículos estruturais";
+
+  const fundHref = (fund: HighlightFund): string | undefined =>
+    fund.linked ? resolve("/fundo/[id]", { id: fund.seriesId }) : undefined;
+
+  const flowBars = (flow: FlowHighlight): HorizontalBar[] =>
     flow.bars.map((bar) => ({
       id: bar.seriesId,
       label: bar.partial ? `${bar.name}*` : bar.name,
-      value: bar.netFlow * sign,
+      value: bar.netFlow,
+      href: fundHref(bar),
     }));
-
-  const fundCount = (count: number): string => (count === 1 ? "fundo" : "fundos");
 
   const seriesCount = (count: number): string => (count === 1 ? "série" : "séries");
 </script>
 
 {#snippet fundLink(fund: HighlightFund)}
-  {#if fund.linked}
-    <a class="link link-hover" href={resolve("/fundo/[id]", { id: fund.seriesId })}>{fund.name}</a>
-  {:else}
+  {@const href = fundHref(fund)}
+  {#if href === undefined}
     <span>{fund.name}</span>
+  {:else}
+    <a class="link link-hover" {href}>{fund.name}</a>
   {/if}
 {/snippet}
 
-{#snippet flowCard(title: string, flow: FlowHighlight, sign: 1 | -1, slot: number, label: string)}
+{#snippet cardTitle(title: string, scope: string, id?: string)}
+  <div class="flex flex-col gap-0.5">
+    <h3 {id} class="text-sm font-semibold">{title}</h3>
+    <p class="text-base-content/70 text-xs">{scope}</p>
+  </div>
+{/snippet}
+
+{#snippet flowCard(title: string, flow: FlowHighlight, slot: number, label: string)}
   <article class="card bg-base-100 border-base-content/10 border">
     <div class="card-body gap-3 p-4 sm:p-5">
-      <h3 class="text-sm font-semibold">{title}</h3>
-      <HorizontalBarChart
-        rows={flowBars(flow, sign)}
-        formatValue={(value) => moneyCompact(value * sign)}
-        ariaLabel={label}
-        limit={flow.bars.length}
-        positiveSlot={slot}
-        negativeSlot={slot}
-      />
+      {@render cardTitle(title, `${UNIVERSE_SCOPE}.`)}
+      <HorizontalBarChart rows={flowBars(flow)} formatValue={moneyCompact} ariaLabel={label} {slot} />
       {#if flow.hasPartial}
         <p class="text-base-content/70 grow-0 text-xs">
           * janela parcial: menos de 12 meses de captação.
@@ -60,8 +63,8 @@
   <div class="flex flex-col gap-0.5">
     <h2 id="highlights-title" class="text-base font-semibold">Destaques</h2>
     <p class="text-base-content/70 text-xs">
-      Público Geral, sem veículos estruturais, 12 meses até {date(highlights.asOf)}. Não segue os
-      filtros da página.
+      Dados até {date(highlights.asOf)}. Cada cartão diz o próprio recorte, e nenhum segue os filtros
+      da página.
     </p>
   </div>
 
@@ -70,21 +73,23 @@
       {@const cdi = highlights.cdi}
       <article class="card bg-base-100 border-base-content/10 border">
         <div class="card-body gap-3 p-4 sm:p-5">
-          <h3 class="text-sm font-semibold">Contra o CDI em 12 meses</h3>
+          {@render cardTitle("Contra o CDI em 12 meses", `${UNIVERSE_SCOPE}.`)}
           <div class="flex flex-col gap-0.5">
             <p class="text-sm">
               <span class="text-2xl font-medium tracking-[-0.01em] tabular-nums"
                 >{integer(cdi.beating)} de {integer(cdi.measured)}</span
               >
-              {fundCount(cdi.measured)} renderam acima do CDI
+              {seriesCount(cdi.measured)} renderam acima do CDI
             </p>
-            <p class="text-base-content/70 text-xs">
-              CDI no período: <span class="tabular-nums">{percent2(cdi.cdi12m)}</span>
-            </p>
+            {#if cdi.cdi12m !== null}
+              <p class="text-base-content/70 text-xs">
+                CDI no período: <span class="tabular-nums">{percent2(cdi.cdi12m)}</span>
+              </p>
+            {/if}
           </div>
           {#if cdi.leaders.length > 0}
             <table class="table-sm table">
-              <caption class="sr-only">Fundos que renderam acima do CDI em 12 meses</caption>
+              <caption class="sr-only">Séries que renderam acima do CDI em 12 meses</caption>
               <thead>
                 <tr>
                   <th scope="col" class="px-0">Fundo</th>
@@ -109,7 +114,7 @@
             {#if cdi.hiddenLeaders > 0}
               <p class="text-base-content/70 grow-0 text-xs tabular-nums">
                 +{integer(cdi.hiddenLeaders)}
-                {fundCount(cdi.hiddenLeaders)}
+                {seriesCount(cdi.hiddenLeaders)}
               </p>
             {/if}
           {/if}
@@ -121,9 +126,8 @@
       {@render flowCard(
         "Maiores captações em 12 meses",
         highlights.inflows,
-        1,
         INFLOW_SLOT,
-        "Fundos com as maiores captações líquidas em 12 meses",
+        "Séries com as maiores captações líquidas em 12 meses",
       )}
     {/if}
 
@@ -131,9 +135,8 @@
       {@render flowCard(
         "Maiores resgates em 12 meses",
         highlights.outflows,
-        -1,
         OUTFLOW_SLOT,
-        "Fundos com os maiores resgates líquidos em 12 meses",
+        "Séries com os maiores resgates líquidos em 12 meses",
       )}
     {/if}
 
@@ -141,7 +144,10 @@
       {@const event = highlights.creditEvent}
       <article class="card bg-base-100 border-base-content/10 border">
         <div class="card-body gap-3 p-4 sm:p-5">
-          <h3 class="text-sm font-semibold">Evento de crédito de {date(event.date)}</h3>
+          {@render cardTitle(
+            `Evento de crédito de ${date(event.date)}`,
+            `Todas as séries monitoradas da gestora, desde ${date(event.windowStart)}.`,
+          )}
           <div class="flex flex-col gap-0.5">
             <p class="text-sm">
               <span class="text-2xl font-medium tracking-[-0.01em] tabular-nums"
@@ -151,13 +157,12 @@
             </p>
             <p class="text-base-content/70 text-xs">
               Variação da cota entre <span class="tabular-nums">{percent2(event.minChange)}</span> e
-              <span class="tabular-nums">{percent2(event.maxChange)}</span>, entre todas as séries
-              monitoradas da gestora.
+              <span class="tabular-nums">{percent2(event.maxChange)}</span>.
             </p>
           </div>
           <ul
             class="flex flex-col gap-1 text-sm"
-            aria-label={`Séries com salto isolado em ${date(event.date)}`}
+            aria-label={`Séries com queda isolada em ${date(event.date)}`}
           >
             {#each event.series as entry (entry.seriesId)}
               <li class="flex items-baseline justify-between gap-3">
@@ -167,8 +172,8 @@
             {/each}
           </ul>
           <p class="text-base-content/70 grow-0 text-xs">
-            Salto isolado: fora do padrão do próprio fundo e não compartilhado pelo mercado.
-            <a class="link" href={resolve("/qualidade")}>Ver Qualidade</a>.
+            Queda isolada: fora do padrão da própria série e não compartilhada pelo mercado.
+            <a class="link" href={resolve("/qualidade")}>Ver qualidade</a>.
           </p>
         </div>
       </article>
@@ -176,7 +181,7 @@
 
     {#if highlights.incentivized}
       <article
-        class="card bg-base-100 border md:col-span-2 xl:col-span-2"
+        class="card bg-base-100 border md:col-span-2"
         style:border-color="var(--color-warning)"
         aria-labelledby="incentivized-title"
       >
@@ -196,7 +201,7 @@
                 <path d={path} />
               {/each}
             </svg>
-            <h3 id="incentivized-title" class="text-sm font-semibold">Fundos incentivados</h3>
+            {@render cardTitle("Fundos incentivados", `${UNIVERSE_SCOPE}.`, "incentivized-title")}
           </div>
           <p class="grow-0 text-sm">
             Fundos incentivados pagam rendimentos que o informe parece registrar como resgate,
