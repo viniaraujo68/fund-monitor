@@ -4,7 +4,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from fund_monitor.calc.flows import aggregate_monthly, flow_summary, monthly_flows
+from fund_monitor.calc.flows import aggregate_monthly, aggregate_totals, flow_summary, monthly_flows
 
 
 def rows_frame(records: list[tuple]) -> pl.DataFrame:
@@ -81,3 +81,9 @@ def test_aggregate_rejects_subclass_level_labels() -> None:
     attributes = pl.DataFrame({"cnpj": ["A", "A"], "target_audience": ["Público Geral", "Profissional"]})
     with pytest.raises(ValueError, match="class-level labels"):
         aggregate_monthly(ROWS, attributes, "target_audience")
+
+
+def test_aggregate_totals_use_last_report_and_twelve_month_flows() -> None:
+    other = rows_frame([("B", "B", date(2026, 2, 27), Decimal("500"), Decimal("20"), Decimal("5"), 3)])
+    totals = aggregate_totals(pl.concat([ROWS, other]), as_of=date(2026, 3, 31))
+    assert totals == {"net_assets": pytest.approx(1800), "net_flow_12m": pytest.approx(165), "classes": 2}

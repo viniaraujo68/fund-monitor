@@ -5,7 +5,7 @@ import polars as pl
 
 from fund_monitor import config
 from fund_monitor.calc.benchmarks import benchmark_levels
-from fund_monitor.calc.flows import aggregate_monthly, flow_summary, monthly_flows
+from fund_monitor.calc.flows import aggregate_monthly, aggregate_totals, flow_summary, monthly_flows
 from fund_monitor.calc.peers import GROUP_KEY, PEER_WINDOW, peer_positions, peer_table
 from fund_monitor.calc.returns import cumulative_index, daily_returns, rolling_12m_returns, subtract_months, window_returns
 from fund_monitor.calc.risk import drawdown_series, risk_metrics
@@ -27,19 +27,21 @@ AGGREGATE_GROUPS = ("cvm_classification", "anbima_classification")
 AGGREGATE_SCOPES = {"monitored": select_monitored_series, "manager": select_manager_series}
 
 
-def aggregates(daily: pl.DataFrame, registry: pl.DataFrame) -> pl.DataFrame:
-    frames = []
+def aggregates(daily: pl.DataFrame, registry: pl.DataFrame, as_of: date) -> tuple[pl.DataFrame, pl.DataFrame]:
+    monthly, totals = [], []
     for scope, select in AGGREGATE_SCOPES.items():
         series = select(registry, config.MANAGER_CNPJ)
         rows = aggregate_rows(daily, series)
         attributes = series.select("cnpj", *AGGREGATE_GROUPS).unique()
+        totals.append({"scope": scope, "as_of": as_of, **aggregate_totals(rows, as_of)})
         for group in AGGREGATE_GROUPS:
-            frames.append(
+            monthly.append(
                 aggregate_monthly(rows, attributes, group)
                 .rename({group: "group_value"})
                 .with_columns(scope=pl.lit(scope), group=pl.lit(group))
             )
-    return pl.concat(frames).select("scope", "group", "group_value", "month", "net_flow", "net_assets_end", "classes")
+    columns = ["scope", "group", "group_value", "month", "net_flow", "net_assets_end", "classes"]
+    return pl.concat(monthly).select(columns), pl.DataFrame(totals)
 
 
 def peer_subjects(monitored: pl.DataFrame, windows: pl.DataFrame, risk: pl.DataFrame) -> pl.DataFrame:
@@ -75,8 +77,8 @@ def calculate(registry: pl.DataFrame) -> dict[str, pl.DataFrame]:
         "drawdown": drawdown_series(cumulative),
         "monthly_flows": monthly_flows(flow_rows, quotas),
         "flow_summary": flow_summary(flow_rows, as_of),
-        "aggregate_monthly": aggregates(daily, registry),
     }
+    metrics["aggregate_monthly"], metrics["aggregate_totals"] = aggregates(daily, registry, as_of)
     logger.info("calc: as of %s, %d series, %d quota rows", as_of, quotas["series_id"].n_unique(), quotas.height)
     return metrics
 

@@ -107,3 +107,15 @@ def aggregate_monthly(rows: pl.DataFrame, attributes: pl.DataFrame, group_column
         .agg(pl.col("net_flow").sum(), pl.col("net_assets_end").sum(), pl.len().alias("classes"))
         .sort(group_column, "month")
     )
+
+
+def aggregate_totals(rows: pl.DataFrame, as_of: date) -> dict[str, float]:
+    year_ago = subtract_months(as_of, 12)
+    daily = as_float(rows).filter(pl.col("date") <= as_of)
+    last_dates = daily.group_by("cnpj").agg(pl.col("date").max().alias("last_date"))
+    latest = daily.join(last_dates, on="cnpj").filter(pl.col("date") == pl.col("last_date"))
+    return {
+        "net_assets": latest["net_assets"].sum(),
+        "net_flow_12m": daily.filter(pl.col("date") > year_ago)["net_flow"].sum(),
+        "classes": latest["cnpj"].n_unique(),
+    }
