@@ -1,11 +1,14 @@
-from decimal import Decimal
+import shutil
+from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
 
+from fund_monitor import config
+from fund_monitor.collect import cvm_registry
 from fund_monitor.collect.cvm_registry import RegistryTables, build_registry, read_registry_zip
-from fund_monitor.universe import select_manager_series, select_monitored_series
+from fund_monitor.universe import mark_reported_subclasses, select_manager_series, select_monitored_series
 
 SAMPLE_ZIP = Path(__file__).parent / "fixtures" / "registro_fundo_classe_sample.zip"
 ICATU_VANGUARDA = "68622174000120"
@@ -19,7 +22,8 @@ def tables() -> RegistryTables:
 
 @pytest.fixture(scope="module")
 def registry(tables: RegistryTables) -> pl.DataFrame:
-    return build_registry(tables)
+    built = build_registry(tables)
+    return mark_reported_subclasses(built, built["subclass_id"].drop_nulls())
 
 
 def series_keys(frame: pl.DataFrame) -> set[tuple[str, str | None]]:
@@ -60,11 +64,20 @@ def test_class_repeated_per_custodian_collapses(tables: RegistryTables, registry
 
 
 def test_types(registry: pl.DataFrame) -> None:
-    assert registry.schema["class_net_assets"] == pl.Decimal(20, 2)
-    assert registry.schema["class_start_date"] == pl.Date
     assert registry.schema["exclusive"] == pl.Boolean
-    row = registry.filter(pl.col("cnpj") == "04820026000137").row(0, named=True)
-    assert isinstance(row["class_net_assets"], Decimal)
+
+
+def test_unused_columns_are_not_parsed(tables: RegistryTables) -> None:
+    classes = tables.classes.with_columns(
+        Tributacao_Longo_Prazo=pl.lit("Sim"),
+        Patrimonio_Liquido=pl.lit("1,5"),
+        Data_Patrimonio_Liquido=pl.lit("31/08/2026"),
+        Data_Inicio=pl.lit("2026-02-30"),
+    )
+    subclasses = tables.subclasses.with_columns(Data_Inicio=pl.lit("2026-02-30"))
+    registry = build_registry(RegistryTables(tables.funds, classes, subclasses))
+    assert registry.height == build_registry(tables).height
+    assert not {"class_start_date", "subclass_start_date", "long_term_taxation", "class_net_assets", "class_net_assets_date"} & set(registry.columns)
 
 
 def test_unknown_exclusive_flag_is_rejected(tables: RegistryTables) -> None:
@@ -124,3 +137,22 @@ def test_waiting_class_with_disagreeing_subclasses_is_not_monitored(registry: pl
 
 def test_class_with_an_operational_subclass_is_not_duplicated(registry: pl.DataFrame) -> None:
     assert (DIVIDENDS_CNPJ, None) not in series_keys(select_manager_series(registry, ICATU_VANGUARDA))
+
+
+def test_new_snapshot_replaces_the_older_ones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "REGISTRY_RAW_DIR", tmp_path)
+    downloads = []
+
+    def fake_download(url: str, destination: Path) -> Path:
+        downloads.append(destination.name)
+        shutil.copy(SAMPLE_ZIP, destination)
+        return destination
+
+    monkeypatch.setattr(cvm_registry, "download_file", fake_download)
+    for name in ("registro_fundo_classe_20260925.zip", "registro_fundo_classe_20260926.zip", "notes.txt"):
+        (tmp_path / name).write_bytes(b"old")
+    registry = cvm_registry.collect_registry(date(2026, 9, 28))
+    cvm_registry.collect_registry(date(2026, 9, 28))
+    assert downloads == ["registro_fundo_classe_20260928.zip"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["notes.txt", "registro_fundo_classe_20260928.zip"]
+    assert registry.height == 9

@@ -115,3 +115,32 @@ def test_missing_past_month_fails(data_dirs: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(cvm_daily, "download_if_changed", not_found)
     with pytest.raises(httpx.HTTPStatusError):
         cvm_daily.collect_month(AUGUST, targets(data_dirs), reference_month=date(2026, 9, 1))
+
+
+def test_alphanumeric_cnpj_keeps_its_letters() -> None:
+    header = ";".join(cvm_daily.EXPECTED_COLUMNS) + "\n"
+    line = "CLASSES - FIF;12.ABC.345/01DE-35;;2026-08-31;100.00;1.000000000000;100.00;0.00;0.00;1\n"
+    other = "CLASSES - FIF;04.820.026/0001-37;;2026-08-31;100.00;1.000000000000;100.00;0.00;0.00;1\n"
+    content = cvm_daily.filter_lines([header, line, other], {"12ABC34501DE35"})
+    frame = pl.read_csv(content.encode(), separator=";", infer_schema=False, quote_char=None)
+    assert cvm_daily.mask_cnpj("12ABC34501DE35") == "12.ABC.345/01DE-35"
+    assert cvm_daily.normalize_daily(frame)["cnpj"].to_list() == ["12ABC34501DE35"]
+
+
+def test_reported_subclasses_need_a_positive_quota(tmp_path: Path) -> None:
+    rows = pl.DataFrame(
+        {
+            "cnpj": ["A", "A", "B", "C"],
+            "subclass_id": [None, "ZEROED", "REPORTED", "PEER"],
+            "date": [AUGUST] * 4,
+            "quota_value": [Decimal("1"), Decimal("0"), Decimal("1.5"), Decimal("2")],
+        },
+        schema_overrides={"subclass_id": pl.String, "quota_value": pl.Decimal(28, 12)},
+    )
+    (tmp_path / "manager").mkdir()
+    (tmp_path / "peers").mkdir()
+    rows.head(3).write_parquet(tmp_path / "manager" / "202608.parquet")
+    rows.tail(1).write_parquet(tmp_path / "peers" / "202608.parquet")
+    directories = [tmp_path / "manager", tmp_path / "peers", tmp_path / "missing"]
+    assert cvm_daily.reported_subclasses(directories) == {"REPORTED", "PEER"}
+    assert cvm_daily.reported_subclasses([tmp_path / "missing"]) == set()

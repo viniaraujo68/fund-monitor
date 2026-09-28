@@ -9,6 +9,7 @@ TRADING_DAYS_PER_YEAR = 252
 MONTHLY_WINDOWS = {"3m": 3, "6m": 6, "12m": 12, "24m": 24}
 SINCE_START = "since_start"
 MIN_MONTHS_TO_ANNUALIZE = 12
+MAX_QUOTA_STALENESS = timedelta(days=7)
 BENCHMARKS = (CDI, IMA_B, IBOVESPA)
 
 
@@ -71,7 +72,9 @@ def annualize(total_return: pl.Expr) -> pl.Expr:
 
 def window_returns(quotas: pl.DataFrame, levels: pl.DataFrame, as_of: date) -> pl.DataFrame:
     spans = quotas.group_by("series_id").agg(
-        pl.col("date").min().alias("first_date"), pl.col("date").max().alias("last_date")
+        pl.col("date").min().alias("first_date"),
+        pl.col("date").max().alias("last_date"),
+        pl.col("date").filter(pl.col("inherited")).max().alias("inherited_until"),
     )
     fixed = spans.join(window_anchors(as_of), how="cross")
     since_start = spans.with_columns(
@@ -82,14 +85,16 @@ def window_returns(quotas: pl.DataFrame, levels: pl.DataFrame, as_of: date) -> p
     )
     grid = attach_quota(grid, quotas, "anchor_date", "base")
     grid = attach_quota(grid, quotas, "as_of", "end")
-    grid = attach_period_benchmarks(grid, levels)
-    annualizable = (pl.col("months") >= MIN_MONTHS_TO_ANNUALIZE) | (
+    grid = attach_period_benchmarks(grid, levels).with_columns(
+        stale=pl.col("end_date") < pl.lit(as_of - MAX_QUOTA_STALENESS)
+    )
+    long_enough = (pl.col("months") >= MIN_MONTHS_TO_ANNUALIZE) | (
         (pl.col("window") == SINCE_START) & (pl.col("business_days") >= TRADING_DAYS_PER_YEAR)
     )
     return (
         grid.with_columns(
             pl.when(pl.col("has_history")).then(pl.col("end_quota") / pl.col("base_quota") - 1).alias("fund_return"),
-            annualizable.alias("annualizable"),
+            (long_enough & pl.col("stale").not_()).alias("annualizable"),
         )
         .with_columns(
             pl.when("annualizable").then(annualize(pl.col("fund_return"))).alias("fund_annualized"),
@@ -97,9 +102,7 @@ def window_returns(quotas: pl.DataFrame, levels: pl.DataFrame, as_of: date) -> p
             pl.when(pl.col("annualizable") & (pl.col("cdi_return") > 0))
             .then(pl.col("fund_return") / pl.col("cdi_return"))
             .alias("pct_cdi"),
-            (pl.col("fund_return") - pl.col("cdi_return")).alias("excess_cdi"),
-            (pl.col("fund_return") - pl.col("ima_b_return")).alias("excess_ima_b"),
-            (pl.col("fund_return") - pl.col("ibov_return")).alias("excess_ibov"),
+            *((pl.col("fund_return") - pl.col(f"{b}_return")).alias(f"excess_{b}") for b in BENCHMARKS),
         )
         .drop("base_quota", "end_quota", "as_of")
         .sort("series_id", "window")

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import polars as pl
@@ -55,6 +55,23 @@ def test_subclass_created_after_class_stopped_reporting_does_not_inherit() -> No
     quotas = quota_series(daily, series("RETAIL", "LATE"))
     assert quotas.filter(pl.col("series_id") == f"{CNPJ}-LATE")["date"].to_list() == [date(2025, 8, 12)]
     assert quotas.filter(pl.col("series_id") == f"{CNPJ}-RETAIL")["inherited"].sum() == 3
+
+
+def handoff(first_own: date) -> pl.DataFrame:
+    class_rows = [daily_row(None, day, "1.0", "300") for day in DAYS[:3]]
+    daily = pl.DataFrame([*class_rows, daily_row("NEXT", first_own, "1.1", "300")], schema=split_daily().schema)
+    return quota_series(daily, series("NEXT"))
+
+
+def test_subclass_inherits_when_the_class_reported_seven_days_before() -> None:
+    quotas = handoff(DAYS[2] + timedelta(days=7))
+    assert quotas["inherited"].to_list() == [True, True, True, False]
+
+
+def test_subclass_does_not_inherit_after_an_eight_day_gap() -> None:
+    quotas = handoff(DAYS[2] + timedelta(days=8))
+    assert quotas["date"].to_list() == [DAYS[2] + timedelta(days=8)]
+    assert quotas["inherited"].to_list() == [False]
 
 
 def test_invalid_quota_is_dropped() -> None:

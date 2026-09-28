@@ -1,11 +1,17 @@
+import logging
+from collections.abc import Collection
+
 import polars as pl
 
+from fund_monitor.calc.series import SERIES_KEY
 from fund_monitor.validation import ensure_unique
+
+logger = logging.getLogger(__name__)
 
 NORMAL_STATUS = "Em Funcionamento Normal"
 FIF_CLASS_TYPE = "Classes de Cotas de Fundos FIF"
 GENERAL_PUBLIC = "Público Geral"
-SERIES_KEY = ["cnpj", "subclass_id"]
+REPORTED_COLUMN = "subclass_reported"
 
 
 def is_active_class() -> pl.Expr:
@@ -24,19 +30,29 @@ def consensus(column: str) -> pl.Expr:
     return pl.when(pl.col(column).n_unique() == 1).then(pl.col(column).first()).alias(column)
 
 
-def transition_classes(registry: pl.DataFrame) -> pl.DataFrame:
-    classes = registry.filter(is_active_class(), pl.col("subclass_id").is_not_null())
-    waiting = (
-        classes.group_by("class_registry_id")
-        .agg((pl.col("subclass_status") == NORMAL_STATUS).any().alias("has_operational_subclass"))
-        .filter(pl.col("has_operational_subclass").not_())
+def mark_reported_subclasses(registry: pl.DataFrame, reported: Collection[str]) -> pl.DataFrame:
+    return registry.with_columns(
+        pl.col("subclass_id").is_in(list(reported)).fill_null(False).alias(REPORTED_COLUMN)
+    )
+
+
+def waiting_classes(registry: pl.DataFrame) -> pl.DataFrame:
+    publishing = (pl.col("subclass_status") == NORMAL_STATUS) & pl.col(REPORTED_COLUMN)
+    return (
+        registry.filter(is_active_class(), pl.col("subclass_id").is_not_null())
+        .group_by("class_registry_id")
+        .agg(publishing.any().alias("has_publishing_subclass"))
+        .filter(pl.col("has_publishing_subclass").not_())
         .select("class_registry_id")
     )
-    pending = classes.join(waiting, on="class_registry_id")
+
+
+def transition_classes(registry: pl.DataFrame, waiting: pl.DataFrame) -> pl.DataFrame:
+    pending = registry.filter(is_active_class(), pl.col("subclass_id").is_not_null()).join(waiting, on="class_registry_id")
     agreed = pending.group_by("class_registry_id").agg(
         consensus("exclusive"), consensus("target_audience"), consensus("condominium")
     )
-    subclass_columns = ["subclass_id", "subclass_name", "subclass_status", "subclass_start_date"]
+    subclass_columns = ["subclass_id", "subclass_name", "subclass_status", REPORTED_COLUMN]
     return (
         pending.sort("class_registry_id", "subclass_id")
         .unique("class_registry_id", keep="first", maintain_order=True)
@@ -48,7 +64,9 @@ def transition_classes(registry: pl.DataFrame) -> pl.DataFrame:
 
 
 def active_series(registry: pl.DataFrame) -> pl.DataFrame:
-    return pl.concat([registry.filter(is_active_fif()), transition_classes(registry)])
+    waiting = waiting_classes(registry)
+    operational = registry.filter(is_active_fif()).join(waiting, on="class_registry_id", how="anti")
+    return pl.concat([operational, transition_classes(registry, waiting)])
 
 
 def is_managed_by(manager_cnpj: str) -> pl.Expr:
@@ -66,7 +84,12 @@ def select_monitored_series(registry: pl.DataFrame, manager_cnpj: str) -> pl.Dat
 
 
 def select_peer_candidates(registry: pl.DataFrame, anbima_classifications: list[str], target_audience: str) -> pl.DataFrame:
-    return active_series(registry).filter(
+    series = active_series(registry)
+    ambiguous = series.filter(pl.struct(SERIES_KEY).is_duplicated())
+    if ambiguous.height:
+        logger.warning("peers: %d active series share a (cnpj, subclass_id) key and are left out", ambiguous.height)
+    return series.filter(
+        pl.struct(SERIES_KEY).is_duplicated().not_(),
         pl.col("exclusive").not_(),
         pl.col("target_audience") == target_audience,
         pl.col("anbima_classification").is_in(anbima_classifications),

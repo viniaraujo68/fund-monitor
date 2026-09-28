@@ -6,9 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
     "polars>=1.44.2",
-    "pyarrow>=25.0.1",
     "pydantic>=2.13.5",
 ]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
 
 [build-system]
 requires = ["uv_build>=0.11.6,<0.12.0"]

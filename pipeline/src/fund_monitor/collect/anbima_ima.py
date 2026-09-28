@@ -14,6 +14,7 @@ from fund_monitor.validation import ensure_unique
 logger = logging.getLogger(__name__)
 
 HEADER_PREFIX = "Índice;"
+NO_DATA_PREFIX = "Não há dados disponíveis"
 SCHEMA = {"index": pl.String, "date": pl.Date, "value": INDEX_LEVEL, "daily_change_pct": RATE}
 
 
@@ -39,10 +40,21 @@ def raw_path(day: date) -> Path:
     return config.ANBIMA_RAW_DIR / f"{day:%Y%m%d}.csv"
 
 
+def header_position(lines: list[str]) -> int | None:
+    return next((position for position, line in enumerate(lines) if line.startswith(HEADER_PREFIX)), None)
+
+
+def is_expected_reply(content: bytes) -> bool:
+    text = content.decode("latin1")
+    return text.startswith(NO_DATA_PREFIX) or header_position(text.splitlines()) is not None
+
+
 def parse_ima_csv(content: bytes) -> pl.DataFrame:
     lines = content.decode("latin1").splitlines()
-    header = next((position for position, line in enumerate(lines) if line.startswith(HEADER_PREFIX)), None)
+    header = header_position(lines)
     if header is None:
+        if not is_expected_reply(content):
+            raise ValueError(f"unexpected anbima reply: {content[:80]!r}")
         return pl.DataFrame(schema=SCHEMA)
     frame = pl.read_csv(
         io.StringIO("\n".join(lines[header:])), separator=";", infer_schema=False, quote_char=None
@@ -59,20 +71,30 @@ def needs_fetch(day: date, reference_date: date) -> bool:
     path = raw_path(day)
     if not path.exists():
         return True
+    content = path.read_bytes()
+    if not is_expected_reply(content):
+        return True
     is_recent = (reference_date - day).days <= config.ANBIMA_RETRY_EMPTY_DAYS
-    return is_recent and parse_ima_csv(path.read_bytes()).is_empty()
+    return is_recent and parse_ima_csv(content).is_empty()
 
 
 def fetch_day(client: httpx.Client, day: date) -> None:
     response = client.post(config.ANBIMA_IMA_URL, data=request_form(day))
     response.raise_for_status()
     path = raw_path(day)
+    if not is_expected_reply(response.content):
+        logger.warning("anbima %s: unexpected reply of %d bytes not saved, retried next run", day, len(response.content))
+        path.unlink(missing_ok=True)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(response.content)
 
 
 def read_day(day: date) -> pl.DataFrame:
-    frame = parse_ima_csv(raw_path(day).read_bytes())
+    path = raw_path(day)
+    if not path.exists():
+        return pl.DataFrame(schema=SCHEMA)
+    frame = parse_ima_csv(path.read_bytes())
     mismatched = frame.filter(pl.col("date") != day)
     if mismatched.height:
         logger.warning("anbima %s: dropping %d rows dated otherwise", day, mismatched.height)

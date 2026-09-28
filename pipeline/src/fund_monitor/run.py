@@ -1,5 +1,6 @@
 import logging
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import polars as pl
 
@@ -8,19 +9,20 @@ from fund_monitor.calc.engine import calculate, write_metrics
 from fund_monitor.collect.anbima_ima import collect_ima
 from fund_monitor.collect.b3_ibovespa import collect_ibovespa
 from fund_monitor.collect.bcb_sgs import collect_bcb
-from fund_monitor.collect.cvm_daily import DailyTarget, collect_daily
-from fund_monitor.collect.cvm_registry import collect_registry
+from fund_monitor.collect.cvm_daily import DailyTarget, collect_daily, reported_subclasses
+from fund_monitor.collect.cvm_registry import collect_registry, write_registry
 from fund_monitor.publish.site_json import publish_site
 from fund_monitor.quality.report import run_quality
 from fund_monitor.universe import (
     GENERAL_PUBLIC,
+    mark_reported_subclasses,
     select_manager_series,
     select_monitored_series,
     select_peer_universe,
 )
 
 STAGES = ("collect", "calc", "quality", "publish")
-REFERENCE_DATE = date.today()
+REFERENCE_DATE = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
 
 logger = logging.getLogger("fund_monitor")
 
@@ -34,6 +36,22 @@ def run_collect(reference_date: date) -> None:
 
 def run_collect_cvm(reference_date: date) -> None:
     registry = collect_registry(reference_date)
+    candidates = mark_reported_subclasses(registry, registry["subclass_id"].drop_nulls())
+    manager_series = select_manager_series(candidates, config.MANAGER_CNPJ)
+    peers = select_peer_universe(candidates, config.MANAGER_CNPJ)
+    targets = [
+        DailyTarget("manager", frozenset(manager_series["cnpj"]), config.DAILY_PARQUET_DIR),
+        DailyTarget("peers", frozenset(peers["cnpj"]), config.PEER_DAILY_PARQUET_DIR, config.PEER_DAILY_COLUMNS),
+    ]
+    months = collect_daily(config.WINDOW_START, reference_date, targets)
+    logger.info("daily reports collected for %d months", len(months))
+    reported = reported_subclasses([config.DAILY_PARQUET_DIR, config.PEER_DAILY_PARQUET_DIR])
+    registry = mark_reported_subclasses(registry, reported)
+    write_registry(registry)
+    log_universe(registry)
+
+
+def log_universe(registry: pl.DataFrame) -> None:
     manager_series = select_manager_series(registry, config.MANAGER_CNPJ)
     monitored = select_monitored_series(registry, config.MANAGER_CNPJ)
     logger.info(
@@ -44,12 +62,6 @@ def run_collect_cvm(reference_date: date) -> None:
     )
     peers = select_peer_universe(registry, config.MANAGER_CNPJ)
     logger.info("peers: %d candidate series in %d classes", peers.height, peers["cnpj"].n_unique())
-    targets = [
-        DailyTarget("manager", frozenset(manager_series["cnpj"]), config.DAILY_PARQUET_DIR),
-        DailyTarget("peers", frozenset(peers["cnpj"]), config.PEER_DAILY_PARQUET_DIR, config.PEER_DAILY_COLUMNS),
-    ]
-    months = collect_daily(config.WINDOW_START, reference_date, targets)
-    logger.info("daily reports collected for %d months", len(months))
 
 
 def main() -> None:

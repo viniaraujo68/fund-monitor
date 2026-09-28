@@ -80,31 +80,27 @@ def flow_summary(rows: pl.DataFrame, as_of: date) -> pl.DataFrame:
     )
 
 
+def class_snapshots(frame: pl.DataFrame, *period: str) -> pl.DataFrame:
+    series = frame.group_by("cnpj", "subclass_id", *period).agg(
+        pl.col("net_flow").sum(), pl.col("net_assets").sort_by("date").last()
+    )
+    superseded = pl.col("subclass_id").is_null() & pl.col("subclass_id").is_not_null().any().over("cnpj", *period)
+    return (
+        series.with_columns(superseded.alias("superseded"))
+        .group_by("cnpj", *period)
+        .agg(pl.col("net_flow").sum(), pl.col("net_assets").filter(pl.col("superseded").not_()).sum())
+    )
+
+
 def aggregate_monthly(rows: pl.DataFrame, attributes: pl.DataFrame, group_column: str) -> pl.DataFrame:
-    month = pl.col("date").dt.truncate("1mo").alias("month")
-    per_class = (
-        as_float(rows)
-        .group_by("cnpj", month)
-        .agg(
-            pl.col("net_flow").sum(),
-            pl.col("date").max().alias("month_last_date"),
-        )
-    )
-    month_end_assets = (
-        as_float(rows)
-        .with_columns(month)
-        .join(per_class.select("cnpj", "month", "month_last_date"), on=["cnpj", "month"])
-        .filter(pl.col("date") == pl.col("month_last_date"))
-        .group_by("cnpj", "month")
-        .agg(pl.col("net_assets").sum().alias("net_assets_end"))
-    )
+    monthly = as_float(rows).with_columns(pl.col("date").dt.truncate("1mo").alias("month"))
     labels = attributes.select("cnpj", group_column).unique()
     ensure_unique(labels, ["cnpj"], f"class-level labels for {group_column}")
     return (
-        per_class.join(month_end_assets, on=["cnpj", "month"])
+        class_snapshots(monthly, "month")
         .join(labels, on="cnpj", how="left")
         .group_by(group_column, "month")
-        .agg(pl.col("net_flow").sum(), pl.col("net_assets_end").sum(), pl.len().alias("classes"))
+        .agg(pl.col("net_flow").sum(), pl.col("net_assets").sum().alias("net_assets_end"), pl.len().alias("classes"))
         .sort(group_column, "month")
     )
 
@@ -112,10 +108,9 @@ def aggregate_monthly(rows: pl.DataFrame, attributes: pl.DataFrame, group_column
 def aggregate_totals(rows: pl.DataFrame, as_of: date) -> dict[str, float]:
     year_ago = subtract_months(as_of, 12)
     daily = as_float(rows).filter(pl.col("date") <= as_of)
-    last_dates = daily.group_by("cnpj").agg(pl.col("date").max().alias("last_date"))
-    latest = daily.join(last_dates, on="cnpj").filter(pl.col("date") == pl.col("last_date"))
+    latest = class_snapshots(daily)
     return {
         "net_assets": latest["net_assets"].sum(),
         "net_flow_12m": daily.filter(pl.col("date") > year_ago)["net_flow"].sum(),
-        "classes": latest["cnpj"].n_unique(),
+        "classes": latest.height,
     }

@@ -3,7 +3,8 @@ from datetime import date, timedelta
 
 import polars as pl
 
-from fund_monitor.calc.series import SERIES_KEY, series_id
+from fund_monitor.calc.peers import PEER_WINDOW
+from fund_monitor.calc.series import SERIES_KEY, series_id, split_dates, subclassed_cnpjs
 
 HIGH = "high"
 MEDIUM = "medium"
@@ -32,7 +33,6 @@ FIXED_INCOME_JUMP = 0.03
 FIXED_INCOME = "Renda Fixa"
 REPEATED_QUOTA_DAYS = 3
 UNEXPLAINED_SHARE = 0.01
-PEER_WINDOW_RULE_WINDOW = "12m"
 SOURCE_TOLERANCE_WEEKDAYS = {"cvm_daily": 2, "cdi": 1, "ima_b": 1, "ibov": 1}
 SOURCE_HIGH_EXTRA_WEEKDAYS = 3
 
@@ -42,6 +42,7 @@ class QualityInputs:
     raw_daily: pl.DataFrame
     daily: pl.DataFrame
     manager_series: pl.DataFrame
+    manager_registry: pl.DataFrame
     monitored: pl.DataFrame
     quotas: pl.DataFrame
     returns: pl.DataFrame
@@ -61,23 +62,20 @@ def issues(frame: pl.DataFrame, rule: str, severity: str | pl.Expr, **columns: p
     return frame.select(selected[name].cast(dtype).alias(name) for name, dtype in ISSUE_SCHEMA.items())
 
 
-def empty_issues() -> pl.DataFrame:
-    return pl.DataFrame(schema=ISSUE_SCHEMA)
-
-
-def split_dates(daily: pl.DataFrame) -> pl.DataFrame:
-    return (
-        daily.filter(pl.col("subclass_id").is_not_null())
-        .group_by("cnpj")
-        .agg(pl.col("date").min().alias("split_date"))
-    )
-
-
-def attach_series(rows: pl.DataFrame, monitored: pl.DataFrame) -> pl.DataFrame:
+def attach_series(rows: pl.DataFrame, monitored: pl.DataFrame, quotas: pl.DataFrame) -> pl.DataFrame:
     keys = monitored.select(SERIES_KEY).unique().with_columns(series_id())
     exact = rows.join(keys, on=SERIES_KEY, nulls_equal=True)
-    heirs = keys.filter(pl.col("subclass_id").is_not_null()).select("cnpj", "series_id")
-    inherited = rows.filter(pl.col("subclass_id").is_null()).join(heirs, on="cnpj")
+    handoffs = (
+        quotas.group_by("series_id")
+        .agg(pl.col("date").filter(pl.col("inherited").not_()).min().alias("first_own_date"), pl.col("inherited").any().alias("inherits"))
+        .filter("inherits")
+    )
+    heirs = keys.filter(pl.col("subclass_id").is_not_null()).select("cnpj", "series_id").join(handoffs, on="series_id")
+    inherited = (
+        rows.filter(pl.col("subclass_id").is_null())
+        .join(heirs, on="cnpj")
+        .filter(pl.col("date") < pl.col("first_own_date"))
+    )
     return pl.concat([exact, inherited.select(exact.columns)])
 
 
@@ -85,12 +83,15 @@ def consecutive_run(position: str) -> pl.Expr:
     return (pl.col(position) - pl.int_range(pl.len()).over("series_id")).alias("run")
 
 
-def missing_reports(inputs: QualityInputs) -> pl.DataFrame:
+def expected_reports(inputs: QualityInputs) -> pl.DataFrame:
     calendar = pl.DataFrame({"date": inputs.calendar}).filter(pl.col("date") <= inputs.as_of).with_row_index("position")
     spans = inputs.quotas.group_by("series_id").agg(pl.col("date").min().alias("first_date"))
-    expected = spans.join(calendar, how="cross").filter(pl.col("date") >= pl.col("first_date"))
+    return spans.join(calendar, how="cross").filter(pl.col("date") >= pl.col("first_date"))
+
+
+def missing_reports(inputs: QualityInputs) -> pl.DataFrame:
     missing = (
-        expected.join(inputs.quotas.select("series_id", "date"), on=["series_id", "date"], how="anti")
+        expected_reports(inputs).join(inputs.quotas.select("series_id", "date"), on=["series_id", "date"], how="anti")
         .sort("series_id", "position")
         .with_columns(consecutive_run("position"))
         .group_by("series_id", "run")
@@ -102,38 +103,55 @@ def missing_reports(inputs: QualityInputs) -> pl.DataFrame:
     )
 
 
-def flag_jumps(returns: pl.DataFrame) -> pl.DataFrame:
-    flagged = returns.sort("series_id", "date").with_columns(
-        pl.col("daily_return").rolling_mean(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_mean"),
-        pl.col("daily_return").rolling_std(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_std"),
+def with_spanned_days(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFrame:
+    positions = pl.DataFrame({"date": calendar}, schema={"date": pl.Date}).with_row_index("position")
+    position = pl.col("position").cast(pl.Int64)
+    spanned = position - position.shift(1).over("series_id")
+    return (
+        returns.join(positions, on="date", how="left")
+        .sort("series_id", "date")
+        .with_columns(spanned.fill_null(1).clip(lower_bound=1).alias("spanned_days"))
+        .drop("position")
     )
-    deviation = (pl.col("daily_return") - pl.col("prior_mean")).abs()
-    statistical = (deviation > JUMP_SIGMAS * pl.col("prior_std")) & (deviation >= MATERIAL_DEVIATION)
+
+
+def flag_jumps(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFrame:
+    days = pl.col("spanned_days")
+    daily_equivalent = (1 + pl.col("daily_return")) ** (1 / days) - 1
+    flagged = with_spanned_days(returns, calendar).with_columns(
+        daily_equivalent.rolling_mean(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_mean"),
+        daily_equivalent.rolling_std(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_std"),
+    )
+    deviation = (pl.col("daily_return") - days * pl.col("prior_mean")).abs()
+    statistical_limit = JUMP_SIGMAS * pl.col("prior_std") * days.sqrt()
+    statistical = (deviation > statistical_limit) & (deviation >= MATERIAL_DEVIATION)
     absolute = (pl.col("cvm_classification") == FIXED_INCOME) & (pl.col("daily_return").abs() > FIXED_INCOME_JUMP)
     return flagged.with_columns(
         statistical.fill_null(False).alias("statistical_jump"),
         absolute.fill_null(False).alias("absolute_jump"),
+        pl.max_horizontal(statistical_limit, pl.lit(MATERIAL_DEVIATION)).alias("statistical_threshold"),
     )
 
 
-def market_jump_share(returns: pl.DataFrame) -> pl.DataFrame:
+def market_jump_share(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFrame:
     return (
-        flag_jumps(returns)
+        flag_jumps(returns, calendar)
         .filter(pl.col("prior_std").is_not_null())
         .group_by("date", "cvm_classification")
-        .agg(pl.col("statistical_jump").mean().alias("market_share"), pl.len().alias("market_series"))
+        .agg(pl.col("statistical_jump").mean().alias("market_share"))
     )
 
 
 def quota_jumps(inputs: QualityInputs) -> pl.DataFrame:
     classification = inputs.monitored.with_columns(series_id()).select("series_id", "cvm_classification")
     jumps = (
-        flag_jumps(inputs.returns.join(classification, on="series_id", how="left"))
+        flag_jumps(inputs.returns.join(classification, on="series_id", how="left"), inputs.calendar)
         .filter(pl.col("statistical_jump") | pl.col("absolute_jump"))
         .join(inputs.market_jump_share, on=["date", "cvm_classification"], how="left")
     )
     market_day = pl.col("market_share").fill_null(0) >= MARKET_JUMP_SHARE
     kind = pl.when(pl.col("absolute_jump")).then(pl.lit("absolute")).otherwise(pl.lit("statistical"))
+    threshold = pl.when(pl.col("absolute_jump")).then(pl.lit(FIXED_INCOME_JUMP)).otherwise(pl.col("statistical_threshold"))
     return issues(
         jumps,
         "quota_jump",
@@ -141,7 +159,7 @@ def quota_jumps(inputs: QualityInputs) -> pl.DataFrame:
         series_id=pl.col("series_id"),
         date=pl.col("date"),
         value=pl.col("daily_return"),
-        threshold=JUMP_SIGMAS * pl.col("prior_std"),
+        threshold=threshold,
         detail=pl.concat_str(kind, pl.when(market_day).then(pl.lit("; market-wide")).otherwise(pl.lit(""))),
     )
 
@@ -188,13 +206,13 @@ def zero_values(inputs: QualityInputs) -> pl.DataFrame:
         "net_assets": pl.col("net_assets") <= 0,
         "shareholders": pl.col("shareholders") == 0,
     }
-    rows = attach_series(inputs.daily, inputs.monitored).filter(pl.any_horizontal(invalid.values()))
+    rows = attach_series(inputs.daily, inputs.monitored, inputs.quotas).filter(pl.any_horizontal(invalid.values()))
     detail = pl.concat_str([pl.when(condition).then(pl.lit(name)) for name, condition in invalid.items()], separator=",", ignore_nulls=True)
     return issues(rows, "zero_values", HIGH, series_id=pl.col("series_id"), date=pl.col("date"), detail=detail)
 
 
 def short_history(inputs: QualityInputs) -> pl.DataFrame:
-    short = inputs.windows.filter(pl.col("window") == PEER_WINDOW_RULE_WINDOW, pl.col("fund_return").is_null())
+    short = inputs.windows.filter(pl.col("window") == PEER_WINDOW, pl.col("fund_return").is_null())
     return issues(short, "short_history", INFO, series_id=pl.col("series_id"), date=pl.col("first_date"))
 
 
@@ -211,7 +229,7 @@ def duplicate_reports(inputs: QualityInputs) -> pl.DataFrame:
     )
     differing = pl.concat_str([pl.when(pl.col(c) > 1).then(pl.lit(c)) for c in value_columns], separator=",", ignore_nulls=True)
     conflicts = groups.with_columns(differing.alias("differing")).filter(pl.col("differing") != "")
-    attached = attach_series(conflicts, inputs.monitored)
+    attached = attach_series(conflicts, inputs.monitored, inputs.quotas)
     return issues(
         attached,
         "duplicate_report",
@@ -245,8 +263,6 @@ def stale_sources(inputs: QualityInputs) -> pl.DataFrame:
         if lag is None or lag > tolerance:
             severity = HIGH if lag is None or lag > tolerance + SOURCE_HIGH_EXTRA_WEEKDAYS else MEDIUM
             rows.append({"source": source, "last": last, "lag": lag, "tolerance": tolerance, "severity": severity})
-    if not rows:
-        return empty_issues()
     frame = pl.DataFrame(rows, schema={"source": pl.String, "last": pl.Date, "lag": pl.Int64, "tolerance": pl.Int64, "severity": pl.String})
     return issues(
         frame,
@@ -261,26 +277,39 @@ def stale_sources(inputs: QualityInputs) -> pl.DataFrame:
 
 
 def registry_mismatches(inputs: QualityInputs) -> pl.DataFrame:
-    registered = inputs.manager_series.select(SERIES_KEY).unique()
+    active = inputs.manager_series.select(SERIES_KEY).unique()
+    registered = pl.concat([active, inputs.manager_registry.select(SERIES_KEY)]).unique()
+    inherited = (
+        pl.col("subclass_id").is_null()
+        & pl.col("cnpj").is_in(subclassed_cnpjs(active)["cnpj"].to_list())
+        & (pl.col("date") < pl.col("split_date")).fill_null(False)
+    )
     seen = (
         inputs.raw_daily.join(split_dates(inputs.raw_daily), on="cnpj", how="left")
-        .filter(~(pl.col("subclass_id").is_null() & pl.col("split_date").is_not_null() & (pl.col("date") < pl.col("split_date"))))
+        .filter(inherited.not_())
         .group_by(SERIES_KEY)
         .agg(pl.col("date").min().alias("first"), pl.col("date").max().alias("last"), pl.len().alias("rows"))
     )
-    unregistered = seen.join(registered, on=SERIES_KEY, how="anti", nulls_equal=True).with_columns(series_id())
+    unregistered = seen.join(registered, on=SERIES_KEY, how="anti", nulls_equal=True).with_columns(
+        detail=pl.lit("reported but not registered")
+    )
+    inactive = (
+        seen.join(registered, on=SERIES_KEY, how="semi", nulls_equal=True)
+        .join(active, on=SERIES_KEY, how="anti", nulls_equal=True)
+        .with_columns(detail=pl.lit("reported but not active"))
+    )
     unreported = inputs.monitored.select(SERIES_KEY).join(seen, on=SERIES_KEY, how="anti", nulls_equal=True).with_columns(series_id())
     return pl.concat(
         [
             issues(
-                unregistered,
+                pl.concat([unregistered, inactive]).with_columns(series_id()),
                 "registry_mismatch",
                 MEDIUM,
                 series_id=pl.col("series_id"),
                 date=pl.col("first"),
                 end_date=pl.col("last"),
                 days=pl.col("rows"),
-                detail=pl.lit("reported but not registered"),
+                detail=pl.col("detail"),
             ),
             issues(unreported, "registry_mismatch", MEDIUM, series_id=pl.col("series_id"), detail=pl.lit("registered but never reported")),
         ]
@@ -306,6 +335,4 @@ def run_checks(inputs: QualityInputs) -> pl.DataFrame:
 
 
 def checked_days(inputs: QualityInputs) -> int:
-    calendar = [day for day in inputs.calendar if day <= inputs.as_of]
-    firsts = inputs.quotas.group_by("series_id").agg(pl.col("date").min())["date"].to_list()
-    return sum(sum(1 for day in calendar if day >= first) for first in firsts)
+    return expected_reports(inputs).height

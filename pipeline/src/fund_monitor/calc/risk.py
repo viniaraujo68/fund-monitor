@@ -3,7 +3,7 @@ import math
 import polars as pl
 
 from fund_monitor.calc.benchmarks import IBOVESPA, IMA_B, attach_level
-from fund_monitor.calc.returns import TRADING_DAYS_PER_YEAR
+from fund_monitor.calc.returns import TRADING_DAYS_PER_YEAR, daily_returns
 
 RISK_WINDOWS = ("12m", "24m")
 MIN_OBSERVATIONS = 60
@@ -105,10 +105,8 @@ def drawdown_series(cumulative: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def risk_metrics(
-    quotas: pl.DataFrame, returns: pl.DataFrame, levels: pl.DataFrame, windows: pl.DataFrame
-) -> pl.DataFrame:
-    statistics = return_statistics(returns, levels, windows)
+def risk_metrics(quotas: pl.DataFrame, levels: pl.DataFrame, windows: pl.DataFrame) -> pl.DataFrame:
+    statistics = return_statistics(daily_returns(quotas), levels, windows)
     drawdowns = max_drawdown(quotas, windows)
     sharpe_inputs = windows.select("series_id", "window", "fund_annualized", "cdi_annualized")
     return (

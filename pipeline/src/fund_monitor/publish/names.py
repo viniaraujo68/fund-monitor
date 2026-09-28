@@ -12,7 +12,7 @@ LEGAL_MARKERS = (
     " RENDA FIXA",
     " MULTIMERCADO",
 )
-LOWERCASE_WORDS = {"DE", "DA", "DO", "EM", "E", "NO", "NA"}
+LOWERCASE_WORDS = {"DE", "DA", "DO", "DOS", "DAS", "EM", "E", "NO", "NA", "AO", "AOS", "À", "ÀS", "COM", "POR", "PARA", "SEM"}
 KEPT_UPPERCASE = {"IPCA", "IBOV", "FIFE"}
 CAPITALIZED_WORDS = {"LOW"}
 STRUCTURAL_MARKERS = ("VEÍCULO ESPECIAL", "FIFE")
@@ -71,8 +71,15 @@ def qualifier(full_name: str, base: str) -> str | None:
 def unique_display_names(names: list[tuple[str, str | None]]) -> list[str]:
     bases = [display_name(class_name, subclass_name) for class_name, subclass_name in names]
     counts = {base: bases.count(base) for base in bases}
-    resolved = []
+    qualified = []
     for (class_name, subclass_name), base in zip(names, bases):
         extra = qualifier(subclass_name or class_name, base) if counts[base] > 1 else None
-        resolved.append(f"{base} {extra}" if extra else base)
+        qualified.append(f"{base} {extra}" if extra else base)
+    resolved: list[str] = []
+    for name in qualified:
+        candidate, suffix = name, 1
+        while candidate in resolved:
+            suffix += 1
+            candidate = f"{name} {suffix}"
+        resolved.append(candidate)
     return resolved

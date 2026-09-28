@@ -41,8 +41,12 @@ def own_rows(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
     return daily.join(series_keys(series), on=SERIES_KEY, nulls_equal=True).sort("series_id", "date")
 
 
+def valid_reports(daily: pl.DataFrame) -> pl.DataFrame:
+    return daily.filter(pl.col("quota_value") > 0)
+
+
 def quota_series(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
-    valid = daily.filter(pl.col("quota_value") > 0)
+    valid = valid_reports(daily)
     own = own_rows(valid, series).with_columns(inherited=pl.lit(False))
     first_own = own.group_by("series_id").agg(pl.col("date").min().alias("first_own_date"))
     heirs = series_keys(series).filter(pl.col("subclass_id").is_not_null()).join(first_own, on="series_id")
@@ -62,17 +66,23 @@ def quota_series(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
     return pl.concat([own.select(QUOTA_COLUMNS), inherited.select(QUOTA_COLUMNS)]).sort("series_id", "date")
 
 
-def aggregate_rows(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
-    split_dates = (
+def split_dates(daily: pl.DataFrame) -> pl.DataFrame:
+    return (
         daily.filter(pl.col("subclass_id").is_not_null())
         .group_by("cnpj")
         .agg(pl.col("date").min().alias("split_date"))
     )
-    subclassed = series.filter(pl.col("subclass_id").is_not_null()).select("cnpj").unique()
+
+
+def subclassed_cnpjs(series: pl.DataFrame) -> pl.DataFrame:
+    return series.filter(pl.col("subclass_id").is_not_null()).select("cnpj").unique()
+
+
+def aggregate_rows(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
     before_split = (
         daily.filter(pl.col("subclass_id").is_null())
-        .join(subclassed, on="cnpj")
-        .join(split_dates, on="cnpj", how="left")
+        .join(subclassed_cnpjs(series), on="cnpj")
+        .join(split_dates(daily), on="cnpj", how="left")
         .filter(pl.col("split_date").is_null() | (pl.col("date") < pl.col("split_date")))
         .drop("split_date")
     )

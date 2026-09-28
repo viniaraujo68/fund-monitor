@@ -49,11 +49,11 @@ def benchmark_levels(indices: pl.DataFrame, ima: pl.DataFrame, ibovespa: pl.Data
 
 
 def attach_level(
-    frame: pl.DataFrame, levels: pl.DataFrame, benchmark: str, date_column: str, alias: str
+    frame: pl.DataFrame, levels: pl.DataFrame, benchmark: str, date_column: str, alias: str, value: str = "level"
 ) -> pl.DataFrame:
     right = (
         levels.filter(pl.col("benchmark") == benchmark)
-        .select(pl.col("date").alias("level_date"), pl.col("level").alias(alias))
+        .select(pl.col("date").alias("level_date"), pl.col(value).alias(alias))
         .sort("level_date")
     )
     return (
@@ -64,13 +64,4 @@ def attach_level(
 
 
 def attach_accruals(frame: pl.DataFrame, levels: pl.DataFrame, date_column: str, alias: str) -> pl.DataFrame:
-    right = (
-        levels.filter(pl.col("benchmark") == CDI)
-        .select(pl.col("date").alias("accrual_date"), pl.col("accruals").alias(alias))
-        .sort("accrual_date")
-    )
-    return (
-        frame.sort(date_column)
-        .join_asof(right, left_on=date_column, right_on="accrual_date", strategy="backward")
-        .drop("accrual_date")
-    )
+    return attach_level(frame, levels, CDI, date_column, alias, "accruals")

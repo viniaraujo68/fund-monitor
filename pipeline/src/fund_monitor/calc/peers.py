@@ -2,7 +2,7 @@ from datetime import date
 
 import polars as pl
 
-from fund_monitor.calc.returns import daily_returns, window_returns
+from fund_monitor.calc.returns import window_returns
 from fund_monitor.calc.risk import risk_metrics
 from fund_monitor.calc.series import deduplicate_reports, own_rows, quota_series, series_id
 
@@ -18,7 +18,7 @@ def series_metrics(
 ) -> pl.DataFrame:
     quotas = quota_series(daily, series)
     windows = window_returns(quotas, levels, as_of).filter(pl.col("window") == PEER_WINDOW)
-    risk = risk_metrics(quotas, daily_returns(quotas), levels, windows)
+    risk = risk_metrics(quotas, levels, windows)
     latest_assets = (
         own_rows(daily, series)
         .filter(pl.col("date") <= as_of)
@@ -26,7 +26,7 @@ def series_metrics(
         .agg(pl.col("net_assets").sort_by("date").last().cast(pl.Float64).alias("net_assets"))
     )
     return (
-        windows.select("series_id", "fund_return")
+        windows.select("series_id", "fund_return", "stale")
         .join(risk.select("series_id", "volatility", "max_drawdown"), on="series_id", how="left")
         .join(latest_assets, on="series_id", how="left")
     )
@@ -37,6 +37,7 @@ def peer_table(peer_daily: pl.DataFrame, candidates: pl.DataFrame, levels: pl.Da
     attributes = candidates.with_columns(series_id()).select("series_id", "cnpj", "class_name", *GROUP_KEY)
     eligible = (
         pl.all_horizontal(pl.col(metric).is_not_null() for metric in PEER_METRICS)
+        & pl.col("stale").not_()
         & (pl.col("net_assets") > MIN_PEER_NET_ASSETS)
     )
     return attributes.join(metrics, on="series_id", how="left").with_columns(eligible.fill_null(False).alias("eligible"))
@@ -66,7 +67,7 @@ def peer_positions(funds: pl.DataFrame, peers: pl.DataFrame) -> pl.DataFrame:
     enough = pl.col("peer_count") >= MIN_PEERS
     measured = [column for column in positions.columns if column not in ("series_id", "peer_count")]
     return (
-        funds.select("series_id", *GROUP_KEY)
+        funds.select("series_id", *GROUP_KEY, *PEER_METRICS)
         .join(positions, on="series_id", how="left")
         .with_columns(pl.col("peer_count").fill_null(0))
         .with_columns(pl.when(enough).then(pl.col(column)).alias(column) for column in measured)

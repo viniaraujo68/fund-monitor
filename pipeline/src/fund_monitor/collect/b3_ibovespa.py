@@ -40,8 +40,40 @@ def parse_year(document: dict, year: int) -> pl.DataFrame:
     )
 
 
+def last_expected_session(year: int) -> date:
+    day = date(year, 12, 30)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def is_final(year: int) -> bool:
+    path = raw_path(year)
+    year_end = date(year, 12, 31)
+    written = date.fromtimestamp(path.stat().st_mtime)
+    if written <= year_end:
+        return False
+    if written > year_end + timedelta(days=REFRESH_GRACE_DAYS):
+        return True
+    closes = parse_year(json.loads(path.read_bytes()), year)
+    return closes.height > 0 and closes["date"].max() >= last_expected_session(year)
+
+
 def needs_fetch(year: int, reference_date: date) -> bool:
-    return not raw_path(year).exists() or year >= (reference_date - timedelta(days=REFRESH_GRACE_DAYS)).year
+    return year >= reference_date.year or not raw_path(year).exists() or not is_final(year)
+
+
+def fetch_year(client: httpx.Client, year: int, reference_date: date) -> None:
+    response = client.get(config.B3_INDEX_URL.format(payload=request_payload(year)))
+    response.raise_for_status()
+    try:
+        closes = parse_year(json.loads(response.content), year)
+    except (ValueError, KeyError, TypeError, pl.exceptions.PolarsError) as error:
+        raise ValueError(f"b3 {year}: unreadable reply, not saved: {response.content[:80]!r}") from error
+    if year < reference_date.year and closes.is_empty():
+        raise ValueError(f"b3 {year}: reply for a past year has no closes, not saved")
+    raw_path(year).parent.mkdir(parents=True, exist_ok=True)
+    raw_path(year).write_bytes(response.content)
 
 
 def collect_ibovespa(start: date, reference_date: date) -> pl.DataFrame:
@@ -49,10 +81,7 @@ def collect_ibovespa(start: date, reference_date: date) -> pl.DataFrame:
     with httpx.Client(timeout=60.0) as client:
         for year in years:
             if needs_fetch(year, reference_date):
-                response = client.get(config.B3_INDEX_URL.format(payload=request_payload(year)))
-                response.raise_for_status()
-                raw_path(year).parent.mkdir(parents=True, exist_ok=True)
-                raw_path(year).write_bytes(response.content)
+                fetch_year(client, year, reference_date)
     frames = [parse_year(json.loads(raw_path(year).read_bytes()), year) for year in years]
     ibovespa = (
         pl.concat(frames).filter(pl.col("date") >= start, pl.col("date") < reference_date).sort("date")

@@ -7,7 +7,7 @@ from fund_monitor import config
 from fund_monitor.calc.benchmarks import benchmark_levels
 from fund_monitor.calc.flows import aggregate_monthly, aggregate_totals, flow_summary, monthly_flows
 from fund_monitor.calc.peers import GROUP_KEY, PEER_WINDOW, peer_positions, peer_table
-from fund_monitor.calc.returns import cumulative_index, daily_returns, rolling_12m_returns, subtract_months, window_returns
+from fund_monitor.calc.returns import cumulative_index, rolling_12m_returns, subtract_months, window_returns
 from fund_monitor.calc.risk import drawdown_series, risk_metrics
 from fund_monitor.calc.series import (
     aggregate_rows,
@@ -17,6 +17,7 @@ from fund_monitor.calc.series import (
     own_rows,
     quota_series,
     series_id,
+    valid_reports,
 )
 from fund_monitor.universe import select_manager_series, select_monitored_series, select_peer_universe
 
@@ -46,7 +47,7 @@ def aggregates(daily: pl.DataFrame, registry: pl.DataFrame, as_of: date) -> tupl
 
 def peer_subjects(monitored: pl.DataFrame, windows: pl.DataFrame, risk: pl.DataFrame) -> pl.DataFrame:
     attributes = monitored.with_columns(series_id()).select("series_id", "cnpj", *GROUP_KEY)
-    returns = windows.filter(pl.col("window") == PEER_WINDOW).select("series_id", "fund_return")
+    returns = windows.filter(pl.col("window") == PEER_WINDOW, pl.col("stale").not_()).select("series_id", "fund_return")
     risks = risk.filter(pl.col("window") == PEER_WINDOW).select("series_id", "volatility", "max_drawdown")
     return attributes.join(returns, on="series_id", how="left").join(risks, on="series_id", how="left")
 
@@ -58,14 +59,13 @@ def calculate(registry: pl.DataFrame) -> dict[str, pl.DataFrame]:
     )
     monitored = select_monitored_series(registry, config.MANAGER_CNPJ)
     as_of = complete_as_of(quota_series(daily, monitored))
-    daily = daily.filter(pl.col("date") <= as_of)
+    daily = valid_reports(daily.filter(pl.col("date") <= as_of))
     quotas = quota_series(daily, monitored)
-    returns = daily_returns(quotas)
     windows = window_returns(quotas, levels, as_of)
     cumulative = cumulative_index(quotas, levels, subtract_months(as_of, CHART_MONTHS))
     flow_rows = own_rows(daily, monitored)
-    risk = risk_metrics(quotas, returns, levels, windows)
-    peer_daily = load_daily(config.PEER_DAILY_PARQUET_DIR).filter(pl.col("date") <= as_of)
+    risk = risk_metrics(quotas, levels, windows)
+    peer_daily = valid_reports(load_daily(config.PEER_DAILY_PARQUET_DIR).filter(pl.col("date") <= as_of))
     peers = peer_table(peer_daily, select_peer_universe(registry, config.MANAGER_CNPJ), levels, as_of)
     metrics = {
         "window_returns": windows,

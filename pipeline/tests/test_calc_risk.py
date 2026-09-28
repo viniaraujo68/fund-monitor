@@ -19,7 +19,7 @@ def test_volatility_drawdown_and_extremes_match_hand_calculation(monkeypatch: py
     quotas = quotas_frame("A", days, compound(100.0, [0.02, -0.02, 0.03, -0.01]))
     levels = levels_frame(days, CDI_DAILY)
     windows = window_returns(quotas, levels, as_of=days[-1])
-    row = risk.risk_metrics(quotas, daily_returns(quotas), levels, windows).row(0, named=True)
+    row = risk.risk_metrics(quotas, levels, windows).row(0, named=True)
     deviations = [0.015, -0.025, 0.025, -0.015]
     assert row["volatility"] == pytest.approx(math.sqrt(sum(d * d for d in deviations) / 3) * math.sqrt(252))
     assert row["max_drawdown"] == pytest.approx(-0.02)
@@ -41,6 +41,17 @@ def test_drawdown_without_recovery() -> None:
     assert row["recovery_date"] is None
 
 
+def test_drawdown_without_a_fall_has_no_dates() -> None:
+    days = business_days(date(2026, 1, 2), 4)
+    quotas = quotas_frame("A", days, [100.0, 100.0, 101.0, 102.0])
+    windows = pl.DataFrame(
+        {"series_id": ["A"], "window": ["12m"], "base_date": [days[0]], "end_date": [days[-1]], "fund_return": [0.02]}
+    )
+    row = risk.max_drawdown(quotas, windows).row(0, named=True)
+    assert row["max_drawdown"] == 0
+    assert (row["peak_date"], row["trough_date"], row["recovery_date"]) == (None, None, None)
+
+
 def test_sharpe_beta_and_tracking_error_over_twelve_months() -> None:
     days = business_days(date(2025, 1, 2), 300)
     market_returns = [0.004 if position % 2 else -0.002 for position in range(299)]
@@ -49,7 +60,7 @@ def test_sharpe_beta_and_tracking_error_over_twelve_months() -> None:
     quotas = quotas_frame("RF", days, compound(10.0, fund_returns))
     levels = levels_frame(days, CDI_DAILY, ima_b=ima_b)
     windows = window_returns(quotas, levels, as_of=days[-1])
-    metrics = risk.risk_metrics(quotas, daily_returns(quotas), levels, windows)
+    metrics = risk.risk_metrics(quotas, levels, windows)
     row = metrics.filter(pl.col("window") == "12m").row(0, named=True)
     window = windows.filter(pl.col("window") == "12m").row(0, named=True)
     start = days.index(window["base_date"])

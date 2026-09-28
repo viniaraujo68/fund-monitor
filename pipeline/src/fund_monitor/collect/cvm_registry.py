@@ -16,9 +16,8 @@ FUND_FILE = "registro_fundo.csv"
 CLASS_FILE = "registro_classe.csv"
 SUBCLASS_FILE = "registro_subclasse.csv"
 
-MONEY = pl.Decimal(20, 2)
 YES_NO = {"S": True, "N": False}
-LONG_TERM_TAXATION = {"S": True, "N": False, "N/A": None}
+SNAPSHOT_PREFIX = "registro_fundo_classe_"
 
 FUND_COLUMNS = {
     "ID_Registro_Fundo": "fund_registry_id",
@@ -38,7 +37,6 @@ CLASS_COLUMNS = {
     "CNPJ_Classe": "cnpj",
     "Denominacao_Social": "class_name",
     "Situacao": "class_status",
-    "Data_Inicio": "class_start_date",
     "Tipo_Classe": "class_type",
     "Classificacao": "cvm_classification",
     "Classificacao_Anbima": "anbima_classification",
@@ -46,16 +44,12 @@ CLASS_COLUMNS = {
     "Forma_Condominio": "class_condominium",
     "Exclusivo": "class_exclusive",
     "Publico_Alvo": "class_target_audience",
-    "Tributacao_Longo_Prazo": "long_term_taxation",
-    "Patrimonio_Liquido": "class_net_assets",
-    "Data_Patrimonio_Liquido": "class_net_assets_date",
 }
 SUBCLASS_COLUMNS = {
     "ID_Registro_Classe": "class_registry_id",
     "ID_Subclasse": "subclass_id",
     "Denominacao_Social": "subclass_name",
     "Situacao": "subclass_status",
-    "Data_Inicio": "subclass_start_date",
     "Forma_Condominio": "subclass_condominium",
     "Exclusivo": "subclass_exclusive",
     "Publico_Alvo": "subclass_target_audience",
@@ -84,10 +78,6 @@ def read_registry_zip(path: Path) -> RegistryTables:
 
 def select_renamed(frame: pl.DataFrame, columns: dict[str, str]) -> pl.DataFrame:
     return frame.select(pl.col(source).alias(target) for source, target in columns.items())
-
-
-def parse_date(column: str) -> pl.Expr:
-    return pl.col(column).str.to_date("%Y-%m-%d")
 
 
 def normalize_funds(funds: pl.DataFrame) -> pl.DataFrame:
@@ -135,8 +125,6 @@ def build_registry(tables: RegistryTables) -> pl.DataFrame:
         "fund_status",
         "class_status",
         "subclass_status",
-        parse_date("class_start_date"),
-        parse_date("subclass_start_date"),
         "class_type",
         "cvm_classification",
         "anbima_classification",
@@ -146,9 +134,6 @@ def build_registry(tables: RegistryTables) -> pl.DataFrame:
         .replace_strict(YES_NO, return_dtype=pl.Boolean)
         .alias("exclusive"),
         pl.coalesce("subclass_target_audience", "class_target_audience").alias("target_audience"),
-        pl.col("long_term_taxation").replace_strict(LONG_TERM_TAXATION, return_dtype=pl.Boolean),
-        pl.col("class_net_assets").cast(MONEY, strict=True),
-        parse_date("class_net_assets_date"),
         "administrator_name",
         "manager_cnpjs",
         "manager_names",
@@ -158,15 +143,25 @@ def build_registry(tables: RegistryTables) -> pl.DataFrame:
 
 
 def registry_raw_path(reference_date: date) -> Path:
-    return config.REGISTRY_RAW_DIR / f"registro_fundo_classe_{reference_date:%Y%m%d}.zip"
+    return config.REGISTRY_RAW_DIR / f"{SNAPSHOT_PREFIX}{reference_date:%Y%m%d}.zip"
+
+
+def remove_older_snapshots(kept: Path) -> None:
+    for path in config.REGISTRY_RAW_DIR.glob(f"{SNAPSHOT_PREFIX}*.zip"):
+        if path != kept:
+            path.unlink()
+            logger.info("registry: removed older snapshot %s", path.name)
 
 
 def collect_registry(reference_date: date) -> pl.DataFrame:
     raw_path = registry_raw_path(reference_date)
     if not raw_path.exists():
         download_file(config.CVM_REGISTRY_URL, raw_path)
-    registry = build_registry(read_registry_zip(raw_path))
+    remove_older_snapshots(raw_path)
+    return build_registry(read_registry_zip(raw_path))
+
+
+def write_registry(registry: pl.DataFrame) -> None:
     config.REGISTRY_PARQUET.parent.mkdir(parents=True, exist_ok=True)
     registry.write_parquet(config.REGISTRY_PARQUET, compression="zstd")
     logger.info("registry: %d series written to %s", registry.height, config.REGISTRY_PARQUET)
-    return registry

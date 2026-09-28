@@ -11,12 +11,12 @@ import polars as pl
 
 from fund_monitor import config
 from fund_monitor.collect.download import download_if_changed
+from fund_monitor.collect.numbers import MONEY
 
 logger = logging.getLogger(__name__)
 
 SEPARATOR = ";"
 CNPJ_FIELD = "CNPJ_FUNDO_CLASSE"
-MONEY = pl.Decimal(20, 2)
 QUOTA = pl.Decimal(28, 12)
 EXPECTED_COLUMNS = [
     "TP_FUNDO_CLASSE",
@@ -84,7 +84,7 @@ def read_daily_zip(path: Path, cnpjs: set[str]) -> pl.DataFrame:
 
 def normalize_daily(frame: pl.DataFrame) -> pl.DataFrame:
     normalized = frame.select(
-        pl.col("CNPJ_FUNDO_CLASSE").str.replace_all(r"\D", "").alias("cnpj"),
+        pl.col("CNPJ_FUNDO_CLASSE").str.replace_all(r"[./-]", "").alias("cnpj"),
         pl.col("ID_SUBCLASSE").alias("subclass_id"),
         pl.col("DT_COMPTC").str.to_date("%Y-%m-%d").alias("date"),
         pl.col("TP_FUNDO_CLASSE").alias("report_type"),
@@ -131,3 +131,17 @@ def collect_daily(start: date, reference_date: date, targets: list[DailyTarget])
         if collect_month(month, targets, reference_month) is not None:
             collected.append(month)
     return collected
+
+
+def reported_subclasses(directories: Iterable[Path]) -> set[str]:
+    files = [path for directory in directories for path in sorted(directory.glob("*.parquet"))]
+    if not files:
+        return set()
+    reported = (
+        pl.scan_parquet(files)
+        .filter(pl.col("subclass_id").is_not_null(), pl.col("quota_value") > 0)
+        .select("subclass_id")
+        .unique()
+        .collect()
+    )
+    return set(reported["subclass_id"])
