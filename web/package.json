@@ -1,0 +1,29 @@
+{
+  "name": "fund-monitor-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.19.0",
+    "daisyui": "^5.7.46",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "@viniaraujo68/plinth": "github:viniaraujo68/plinth#7a510904312aae66aa3a13e2026c5e2d5a6db9fa",
+    "chart.js": "^4.5.1"
+  }
+}

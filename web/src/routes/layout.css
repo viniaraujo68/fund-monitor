@@ -1,0 +1,14 @@
+@import "@viniaraujo68/plinth/theme.css";
+
+@source "../../node_modules/@viniaraujo68/plinth/dist";
+
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  exclude: rootscrollgutter;
+}
+
+html,
+body {
+  height: 100%;
+}
