@@ -167,8 +167,8 @@
             {/each}
           </ul>
           <p class="text-base-content/70 grow-0 text-xs">
-            Salto isolado: fora do padrão do próprio fundo e não compartilhado pelo mercado. Ver
-            Qualidade.
+            Salto isolado: fora do padrão do próprio fundo e não compartilhado pelo mercado.
+            <a class="link" href={resolve("/qualidade")}>Ver Qualidade</a>.
           </p>
         </div>
       </article>
@@ -199,9 +199,10 @@
             <h3 id="incentivized-title" class="text-sm font-semibold">Fundos incentivados</h3>
           </div>
           <p class="grow-0 text-sm">
-            Fundos incentivados distribuem rendimentos que o informe registra como resgate. A cota
-            não é ajustada por esse evento, então o retorno pela cota subestima o que o cotista
-            recebeu e a posição entre pares fica distorcida. Ver metodologia.
+            Fundos incentivados pagam rendimentos que o informe parece registrar como resgate,
+            leitura ainda a confirmar. A cota não é ajustada por esse evento, então o retorno pela
+            cota subestima o que o cotista recebeu e a posição entre pares fica distorcida.
+            <a class="link" href={resolve("/metodologia")}>Ver metodologia</a>.
           </p>
           <div class="overflow-x-auto">
             <table class="table-sm table">

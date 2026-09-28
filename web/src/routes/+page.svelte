@@ -482,6 +482,6 @@
 
   <p class="text-base-content/70 text-xs">
     Fonte: CVM (cadastro e informe diário), Bacen SGS, ANBIMA, B3. Séries não exclusivas da gestora;
-    ver metodologia.
+    <a class="link" href={resolve("/metodologia")}>ver metodologia</a>.
   </p>
 </PageFrame>
