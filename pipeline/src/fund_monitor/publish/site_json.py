@@ -9,7 +9,7 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict
 
 from fund_monitor import config
-from fund_monitor.calc.benchmarks import BENCHMARKS_BY_CLASSIFICATION, MARKET_BENCHMARK_BY_CLASSIFICATION
+from fund_monitor.calc.benchmarks import BENCHMARKS_BY_CLASSIFICATION, CDI, MARKET_BENCHMARK_BY_CLASSIFICATION
 from fund_monitor.calc.returns import MONTHLY_WINDOWS, SINCE_START
 from fund_monitor.calc.series import series_id
 from fund_monitor.publish.names import is_structural_vehicle, unique_display_names
@@ -24,6 +24,7 @@ MONEY_DIGITS = 2
 INDEX_DIGITS = 4
 WINDOWS = ("mtd", "ytd", *MONTHLY_WINDOWS, SINCE_START)
 FUNDS_DIRECTORY = "funds"
+DI_BENCHMARK = "DI de um dia"
 
 
 class Contract(BaseModel):
@@ -267,6 +268,12 @@ def risk_value(risk: pl.DataFrame, window: str, column: str, digits: int = RETUR
     return rounded(row[column].item(), digits) if row.height else None
 
 
+def series_benchmarks(classification: str | None, performance_benchmark: str | None) -> tuple[list[str], str | None]:
+    if performance_benchmark == DI_BENCHMARK:
+        return [CDI], None
+    return list(BENCHMARKS_BY_CLASSIFICATION.get(classification, (CDI,))), MARKET_BENCHMARK_BY_CLASSIFICATION.get(classification)
+
+
 def build_summary(
     attributes: dict,
     windows: pl.DataFrame,
@@ -277,6 +284,7 @@ def build_summary(
     issues: pl.DataFrame,
 ) -> FundSummary:
     classification = attributes["cvm_classification"]
+    benchmarks, market_benchmark = series_benchmarks(classification, attributes["performance_benchmark"])
     inherited = cumulative.filter(pl.col("inherited"))
     since_start = windows.filter(pl.col("window") == SINCE_START)
     return FundSummary(
@@ -292,8 +300,8 @@ def build_summary(
         condominium=attributes["condominium"],
         performance_benchmark=attributes["performance_benchmark"],
         structural_vehicle=attributes["structural_vehicle"],
-        benchmarks=list(BENCHMARKS_BY_CLASSIFICATION.get(classification, ("cdi",))),
-        market_benchmark=MARKET_BENCHMARK_BY_CLASSIFICATION.get(classification),
+        benchmarks=benchmarks,
+        market_benchmark=market_benchmark,
         first_date=since_start["first_date"].item() if since_start.height else None,
         last_date=since_start["last_date"].item() if since_start.height else None,
         inherited_until=inherited["date"].max() if inherited.height else None,

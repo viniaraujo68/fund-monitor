@@ -75,6 +75,13 @@ def test_windows_without_history_hide_the_comparison() -> None:
     assert row.fund_return is None
 
 
+def test_di_series_compare_only_with_cdi() -> None:
+    assert site_json.series_benchmarks("Renda Fixa", "DI de um dia") == (["cdi"], None)
+    assert site_json.series_benchmarks("Renda Fixa", "Índice de Mercado Andima NTN-B mais de 5 anos") == (["cdi", "ima_b"], "ima_b")
+    assert site_json.series_benchmarks("Ações", "IBrX") == (["cdi", "ibov"], "ibov")
+    assert site_json.series_benchmarks("Multimercado", "DI de um dia") == (["cdi"], None)
+
+
 def test_no_peer_position_without_peers() -> None:
     assert site_json.build_peer_position({"peer_count": 0}, {}) is None
     assert site_json.build_peer_position(None, {}) is None
