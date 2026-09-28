@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import type { Meta } from "$lib/data/types";
   import { date, datetime, integer } from "$lib/format";
-  import { SEVERITIES, SEVERITY_BADGE_CLASS, severityCountWord, sourceLabel } from "$lib/labels";
+  import { SEVERITIES, SEVERITY_BADGE_CLASS, severityCountWord } from "$lib/labels";
+  import SourceDates from "./SourceDates.svelte";
 
   const { meta }: { meta: Meta } = $props();
 
@@ -13,35 +15,35 @@
   );
 </script>
 
-<section
-  class="card bg-base-100 border-base-content/10 border"
-  aria-labelledby="quality-strip-title"
->
-  <div class="card-body flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-    <div class="flex min-w-0 flex-col gap-1">
-      <h2 id="quality-strip-title" class="text-sm font-semibold">
-        Dados até {date(meta.as_of)}
-      </h2>
-      <p class="text-base-content/70 text-xs">
-        Último dia completo do informe diário · gerado em {datetime(meta.generated_at)} ·
-        {integer(meta.quality.checked_series)} séries · {integer(meta.quality.checked_days)} dias verificados
-      </p>
-      <ul class="text-base-content/70 flex flex-wrap gap-x-3 gap-y-1 text-xs" aria-label="Fontes">
-        {#each meta.sources as source (source.source)}
-          <li>
-            {sourceLabel(source.source)}:
-            <span class="tabular-nums">{date(source.last_date)}</span>
-          </li>
-        {/each}
-      </ul>
+<section aria-labelledby="quality-strip-title">
+  <a
+    href={resolve("/qualidade")}
+    class="card bg-base-100 border-base-content/10 hover:border-base-content/30 focus-visible:outline-primary block border transition-colors"
+  >
+    <div
+      class="card-body flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+    >
+      <div class="flex min-w-0 flex-col gap-1">
+        <h2 id="quality-strip-title" class="text-sm font-semibold">
+          Dados até {date(meta.as_of)}
+        </h2>
+        <p class="text-base-content/70 text-xs">
+          Último dia completo do informe diário · gerado em {datetime(meta.generated_at)} ·
+          {integer(meta.quality.checked_series)} séries · {integer(meta.quality.checked_days)} dias verificados
+        </p>
+        <SourceDates sources={meta.sources} class="text-base-content/70 text-xs" />
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <ul class="flex flex-wrap items-center gap-1.5" aria-label="Alertas de qualidade por severidade">
+          {#each severities as entry (entry.severity)}
+            <li class={["badge badge-sm tabular-nums", SEVERITY_BADGE_CLASS[entry.severity]]}>
+              {integer(entry.count)}
+              {severityCountWord(entry.severity, entry.count)}
+            </li>
+          {/each}
+        </ul>
+        <span class="text-primary text-sm font-medium">Ver alertas →</span>
+      </div>
     </div>
-    <ul class="flex flex-wrap items-center gap-1.5" aria-label="Alertas de qualidade por severidade">
-      {#each severities as entry (entry.severity)}
-        <li class={["badge badge-sm tabular-nums", SEVERITY_BADGE_CLASS[entry.severity]]}>
-          {integer(entry.count)}
-          {severityCountWord(entry.severity, entry.count)}
-        </li>
-      {/each}
-    </ul>
-  </div>
+  </a>
 </section>

@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@viniaraujo68/plinth": "github:viniaraujo68/plinth#7a510904312aae66aa3a13e2026c5e2d5a6db9fa",
-    "chart.js": "^4.5.1"
+    "chart.js": "^4.5.1",
+    "marked": "^18.0.14"
   }
 }

@@ -67,6 +67,9 @@ export const sourceLabel = (key: string): string => lookup(SOURCE_LABELS, key);
 export const isSeverity = (value: string): value is Severity =>
   (SEVERITIES as readonly string[]).includes(value);
 
+export const severityRank = (key: string): number =>
+  isSeverity(key) ? SEVERITIES.indexOf(key) : SEVERITIES.length;
+
 export const severityLabel = (key: string): string =>
   isSeverity(key) ? SEVERITY_LABELS[key] : key;
 

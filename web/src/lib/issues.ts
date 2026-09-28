@@ -14,7 +14,63 @@ export const RULE_LABELS: Record<string, string> = {
   registry_mismatch: "Cadastro divergente",
 };
 
+export const RULES = Object.keys(RULE_LABELS);
+
 export const ruleLabel = (rule: string): string => RULE_LABELS[rule] ?? rule;
+
+export interface RuleDescription {
+  detects: string;
+  threshold: string;
+  severity: string;
+}
+
+export const RULE_DESCRIPTIONS: Record<string, RuleDescription> = {
+  zero_values: {
+    detects: "Informe publicado com cota, PL ou número de cotistas zerado.",
+    threshold: "cota ≤ 0, PL ≤ 0 ou nenhum cotista",
+    severity: "Alta",
+  },
+  duplicate_report: {
+    detects: "Mais de um informe da mesma série no mesmo dia, com valores diferentes.",
+    threshold: "2 ou mais informes no dia com algum valor divergente",
+    severity: "Média",
+  },
+  quota_jump: {
+    detects: "Variação diária da cota fora do padrão recente da série.",
+    threshold: "5σ em 60 dias e ≥ 0,1 % da cota; 3 % absoluto em RF",
+    severity: "Média; informativo quando ≥ 10 % da classe salta no mesmo dia",
+  },
+  unexplained_net_assets: {
+    detects: "Variação mensal do PL que captação líquida e rentabilidade não explicam.",
+    threshold: "resíduo > 1 % do PL do início do mês",
+    severity: "Média",
+  },
+  missing_report: {
+    detects: "Dia útil sem informe depois do início da série.",
+    threshold: "qualquer dia útil sem informe",
+    severity: "Baixa; média a partir de 5 dias úteis seguidos",
+  },
+  short_history: {
+    detects: "Série com menos de 12 meses, fora de rankings e pares.",
+    threshold: "sem retorno na janela de 12 meses",
+    severity: "Informativo",
+  },
+  repeated_quota: {
+    detects: "Mesma cota em informes seguidos, sinal de cota não atualizada.",
+    threshold: "3 ou mais informes seguidos",
+    severity: "Média",
+  },
+  stale_source: {
+    detects: "Fonte de dados sem atualização recente.",
+    threshold: "atraso > 2 dias úteis no informe CVM, > 1 nos índices",
+    severity: "Média; alta com 3 dias úteis além da tolerância ou sem dado",
+  },
+  registry_mismatch: {
+    detects: "Série no cadastro sem informe, ou informe de série fora do cadastro.",
+    threshold: "qualquer divergência",
+    severity: "Média",
+  },
+};
 
 const FIELD_WORDS: Record<string, string> = {
   quota: "cota",
@@ -85,7 +141,7 @@ const quotaJump = (issue: Issue): string => {
   const flags = (issue.detail ?? "").split(";").map((flag) => flag.trim());
   const limit = flags.includes("absolute")
     ? `acima do limite de ${percentShort(0.03)} para renda fixa`
-    : `acima do limite de ${percentShort(issue.threshold)} (5 desvios-padrão em 60 dias)`;
+    : `desvio da média de 60 dias acima de ${percentShort(issue.threshold)} (5 desvios-padrão)`;
   const market = flags.includes("market-wide") ? "; movimento compartilhado pelo mercado" : "";
   return `Variação de ${percent2(issue.value)} na cota em ${date(issue.date)}, ${limit}${market}.`;
 };
@@ -153,3 +209,19 @@ const BUILDERS: Record<string, (issue: Issue) => string> = {
 };
 
 export const issueText = (issue: Issue): string => (BUILDERS[issue.rule] ?? fallback)(issue);
+
+export const issueSpan = (issue: Issue): string =>
+  issue.end_date === null || issue.end_date === issue.date
+    ? date(issue.date)
+    : `de ${date(issue.date)} a ${date(issue.end_date)}`;
+
+const RATIO_RULES = new Set(["quota_jump", "unexplained_net_assets"]);
+
+export const issueMeasure = (issue: Issue): string | null => {
+  if (!RATIO_RULES.has(issue.rule) || issue.value === null) return null;
+  const value = percent2(issue.value);
+  return issue.threshold === null ? value : `${value} / ${percent2(issue.threshold)}`;
+};
+
+export const issueMagnitude = (issue: Issue): number | null =>
+  RATIO_RULES.has(issue.rule) && issue.value !== null ? Math.abs(issue.value) : null;

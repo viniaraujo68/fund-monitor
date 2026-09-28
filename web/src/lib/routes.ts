@@ -4,6 +4,8 @@ import type { RoutingConfig } from "@viniaraujo68/plinth/routing";
 export const routes: RoutingConfig<RouteId> = {
   meta: {
     "/": { title: "Visão geral", icon: "overview" },
+    "/qualidade": { title: "Qualidade", icon: "shield" },
+    "/metodologia": { title: "Metodologia", icon: "book" },
     "/fundo/[id]": { title: "Fundo" },
   },
 
