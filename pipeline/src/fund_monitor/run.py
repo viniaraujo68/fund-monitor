@@ -10,6 +10,7 @@ from fund_monitor.collect.b3_ibovespa import collect_ibovespa
 from fund_monitor.collect.bcb_sgs import collect_bcb
 from fund_monitor.collect.cvm_daily import DailyTarget, collect_daily
 from fund_monitor.collect.cvm_registry import collect_registry
+from fund_monitor.quality.report import run_quality
 from fund_monitor.universe import (
     GENERAL_PUBLIC,
     select_manager_series,
@@ -17,7 +18,7 @@ from fund_monitor.universe import (
     select_peer_universe,
 )
 
-STAGES = ("collect", "calc")
+STAGES = ("collect", "calc", "quality")
 REFERENCE_DATE = date.today()
 
 logger = logging.getLogger("fund_monitor")
@@ -57,6 +58,8 @@ def main() -> None:
         run_collect(REFERENCE_DATE)
     if "calc" in STAGES:
         write_metrics(calculate(pl.read_parquet(config.REGISTRY_PARQUET)))
+    if "quality" in STAGES:
+        run_quality(pl.read_parquet(config.REGISTRY_PARQUET), REFERENCE_DATE)
 
 
 if __name__ == "__main__":
