@@ -1,0 +1,4 @@
+http://{$FUND_MONITOR_DOMAIN} {
+	encode gzip
+	reverse_proxy fund-monitor-web:80
+}

@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    mem_limit: 128m
+    networks:
+      web:
+        aliases:
+          - fund-monitor-web
+
+networks:
+  web:
+    external: true

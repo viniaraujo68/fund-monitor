@@ -1,0 +1,77 @@
+name: daily
+
+on:
+  schedule:
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pipeline/uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Restore raw data cache
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: raw-${{ github.run_id }}
+          restore-keys: raw-
+
+      - name: Install pipeline dependencies
+        working-directory: pipeline
+        run: uv sync --frozen
+
+      - name: Run pipeline tests
+        working-directory: pipeline
+        run: uv run pytest -q
+
+      - name: Run pipeline
+        working-directory: pipeline
+        run: uv run python -m fund_monitor.run
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build site
+        working-directory: web
+        run: npm run build
+
+      - name: Commit updated data
+        run: |
+          git add data/parquet data/site
+          if git diff --cached --quiet -- . ':(exclude)data/site/meta.json'; then
+            echo "No data changes"
+            exit 0
+          fi
+          as_of=$(jq -r .as_of data/site/meta.json)
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Atualiza dados até ${as_of}"
+          git pull --rebase origin main
+          git push
