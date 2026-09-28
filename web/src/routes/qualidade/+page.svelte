@@ -309,7 +309,7 @@
 
 <PageFrame
   title="Qualidade"
-  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo. As exceções são a linha zerada (descartada do cálculo), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (fora de rankings e pares).`}
+  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo. As exceções são a linha zerada (descartada do cálculo), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (sem % do CDI e fora dos pares).`}
   wide
 >
   <section class="flex flex-col gap-2" aria-labelledby="severity-tiles-title">

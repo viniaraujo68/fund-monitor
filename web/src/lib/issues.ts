@@ -42,7 +42,7 @@ export const RULE_DESCRIPTIONS: Record<string, RuleDescription> = {
   },
   unexplained_net_assets: {
     detects: "Variação mensal do PL que captação líquida e rentabilidade não explicam.",
-    threshold: "resíduo > 1 % do PL do início do mês",
+    threshold: "resíduo acima de 1 % do PL do início do mês, em módulo",
     severity: "Média",
   },
   zero_values: {
@@ -51,7 +51,7 @@ export const RULE_DESCRIPTIONS: Record<string, RuleDescription> = {
     severity: "Alta",
   },
   short_history: {
-    detects: "Série com menos de 12 meses, fora de rankings e pares.",
+    detects: "Série com menos de 12 meses, sem % do CDI e fora dos pares.",
     threshold: "sem retorno na janela de 12 meses",
     severity: "Informativo",
   },
@@ -195,7 +195,7 @@ const missingReport = (issue: Issue): string => {
 };
 
 const shortHistory = (issue: Issue): string =>
-  `Série com menos de 12 meses (início em ${date(issue.date)}): fora de rankings e pares.`;
+  `Série com menos de 12 meses (início em ${date(issue.date)}): sem % do CDI e fora dos pares.`;
 
 const repeatedQuota = (issue: Issue): string => {
   const count = issue.days ?? 0;

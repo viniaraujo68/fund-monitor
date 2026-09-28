@@ -6,30 +6,32 @@ Este protótipo roda num processo só, uma vez por dia, e publica JSON estático
 
 O caminho é contínuo, não uma reescrita. O protótipo já tem as peças que um sistema de produção reaproveita:
 
-- **Coletor idempotente.** O informe diário só é baixado de novo quando o tamanho ou o Last-Modified mudam. Cada dia da ANBIMA é gravado uma vez e não é pedido de novo. Rodar duas vezes dá o mesmo resultado.
-- **Bruto reproduzível.** O bruto fica fora do git e pode ser refeito pelo pipeline. O Parquet normalizado e o JSON do site ficam versionados.
-- **Rotina diária.** Uma GitHub Action roda de segunda a sexta, às 20h de Brasília: testes, pipeline, build do site, e commit de `data/` quando há mudança. Cada commit é uma foto do que foi publicado.
-- **Contrato do JSON.** Os modelos pydantic de `publish/site_json.py` recusam campo a mais ou a menos. O front depende desse contrato, não do formato do Parquet.
+- **Resposta conferida antes de gravar.** O Bacen só grava o JSON se ele for a série (a resposta HTML com status 200 é descartada, com até 3 tentativas). A ANBIMA só grava o dia se o arquivo tiver o cabeçalho esperado ou o aviso de "não há dados"; qualquer outra resposta não é gravada e o dia volta na execução seguinte. A B3 só grava o ano se a resposta for legível e, para ano passado, tiver fechamentos. Na CVM, o bruto é gravado como veio: o informe vai para um `.part` que só substitui o arquivo anterior no fim do download, e o cabeçalho e o CNPJ são conferidos na leitura, antes de gravar o Parquet; o cadastro também só é conferido na leitura. Uma resposta ruim da CVM faz a execução falhar. No cadastro, o ZIP ruim fica em disco e a execução seguinte do mesmo dia não o baixa de novo, porque só baixa quando o snapshot do dia não existe.
+- **Coleta que só busca o que mudou.** O informe diário só é baixado de novo quando o tamanho ou o Last-Modified mudam. Um dia da ANBIMA já gravado só é pedido de novo se veio vazio e é recente (até 7 dias) ou se o arquivo gravado não é uma resposta esperada. Um ano passado da B3 só é pedido até o arquivo ser final. O Bacen e o ano corrente da B3 são pedidos a cada execução. Rodar duas vezes seguidas, com as fontes paradas, dá os mesmos dados; muda só a hora de geração.
+- **Universo por subclasse informada.** Uma subclasse só vira série quando está em funcionamento normal e já publicou cota; até lá, a classe é monitorada como ela mesma. O cadastro normalizado guarda essa marca (`subclass_reported`).
+- **Recálculo a partir do git.** O bruto fica fora do git, no cache da Action, só na versão mais recente de cada arquivo. O Parquet normalizado, as métricas e o JSON do site ficam versionados, e as etapas de cálculo, qualidade e publicação leem só Parquet. Rodar essas três etapas no commit de um dia, com `REFERENCE_DATE` daquele dia, refaz o site publicado; conferido para a rodada de 28/09/2026, só a hora de geração muda.
+- **Rotina diária.** Uma GitHub Action roda de segunda a sexta às 20h17 de Brasília (`17 23 * * 1-5` em UTC), com `TZ=America/Sao_Paulo`: instala as dependências travadas (`uv sync --frozen`, com o índice público do PyPI declarado no `pyproject.toml`), roda os testes e o pipeline com `uv run --frozen`, compila o site e confere que `web/build/index.html` existe. Se `data/parquet` ou `data/site` mudaram além do `meta.json`, commita como `github-actions[bot]` e faz push. Às 21h45 um cron na VPS faz `git pull --ff-only && docker compose build --pull && docker compose up -d`, com log no `$HOME` do usuário. O Caddy serve os arquivos de `/_app/immutable` com cache de um ano e todo o resto com `no-cache`, redireciona com 308 o endereço com barra final e responde 404 com página própria.
+- **Contrato do JSON.** Os modelos pydantic de `publish/site_json.py` recusam campo a mais ou a menos. A publicação termina relendo todos os JSON escritos com esses modelos (`verify_site`) e conferindo que o número de séries, de resumos e de arquivos de fundo bate, que a soma dos alertas por severidade bate com a lista e que cada arquivo de fundo tem a série do próprio nome. Os testes publicam um site com dados sintéticos (`pipeline/tests/builders.py`) e conferem que `verify_site` recusa um site sem um arquivo de fundo ou com campo a mais. O front depende desse contrato, não do formato do Parquet.
 - **Regras como código testado.** As 9 regras de qualidade estão em `quality/checks.py`, com limiares em constantes com nome e testes em `pipeline/tests/`.
 
 ## 2. Orquestração
 
 - **Um fluxo por fonte**, em Dagster ou Airflow: cadastro CVM, informe diário, Bacen, ANBIMA e B3. Hoje, se a CVM cai, tudo espera; foi o que aconteceu em 26 e 27/09/2026. Separado, só o que depende da CVM espera, e o resto publica com o alerta de fonte atrasada.
-- **Partição por `(fonte, data)`.** Backfill é reprocessar partições. Como a coleta já é idempotente, reprocessar não duplica nada.
+- **Partição por `(fonte, data)`.** Backfill é reprocessar partições. Como a coleta já regrava cada mês, dia ou ano inteiro, reprocessar não duplica nada.
 - **Dependências explícitas.** O cálculo só roda quando o dia do informe está completo. A regra dos 90 % das séries vira um sensor, em vez de um filtro dentro do cálculo.
-- **Retry com espera crescente** nas fontes instáveis (portal da CVM, formulário da ANBIMA). Depois do último retry, alerta.
+- **Retry com espera crescente** nas fontes instáveis (portal da CVM, formulário da ANBIMA). Depois do último retry, alerta. Hoje só o Bacen tem nova tentativa, 3 vezes com 2 s fixos; nas outras fontes, a falha derruba a execução, e a ANBIMA pede o dia de novo na execução seguinte.
 - **Por que Dagster:** o modelo de "ativos" (arquivo bruto → Parquet → métricas → JSON) é o desenho que o pipeline já tem. Airflow também serve; a escolha depende do que a casa já usa.
 
 ## 3. Armazenamento
 
 | Camada | Hoje | Em produção |
 | --- | --- | --- |
-| Bruto | `data/raw/`, sobrescrito quando a CVM republica | S3 imutável, particionado por fonte e data, **guardando cada versão** do arquivo |
+| Bruto | `data/raw/`, fora do git, no cache da Action; sobrescrito quando a fonte republica | S3 imutável, particionado por fonte e data, **guardando cada versão** do arquivo |
 | Normalizado | Parquet no git | Parquet no lake, particionado por fonte e mês |
 | Analítico | Parquet de métricas | Postgres, ou DuckDB/Athena sobre o lake |
 | Entrega | JSON estático por fundo | API com cache, lida pelo site e por outras ferramentas da mesa |
 
-Guardar cada versão do bruto importa porque a CVM regrava o histórico. Em 27/09/2026 ela regravou 25 meses. Hoje o arquivo antigo é substituído e a diferença só aparece se alguém comparar na hora.
+Guardar cada versão do bruto importa porque a CVM regrava o histórico. Em 27/09/2026 ela regravou 25 meses. Hoje, nas séries que o pipeline guarda, a revisão fica no git como diferença entre dois commits do Parquet: foi assim que as 17 linhas revisadas foram contadas (`findings.md`, item 11). O que se perde é o resto do arquivo antigo, as colunas descartadas e os CNPJs fora do filtro. Sem o bruto antigo, não dá para refazer o passado com um CNPJ ou uma coluna nova.
 
 ## 4. Qualidade
 
@@ -42,16 +44,16 @@ Guardar cada versão do bruto importa porque a CVM regrava o histórico. Em 27/0
 ## 5. Observabilidade
 
 - **Log estruturado** em JSON por etapa: linhas lidas, séries, alertas, duração. Hoje o log já traz essas contagens, mas em texto.
-- **Frescor por fonte como métrica.** A regra 8 já calcula o atraso de cada fonte; em produção esse número vai para um painel, não só para o JSON.
+- **Frescor por fonte como métrica.** Hoje o JSON traz só a última data de cada fonte (`meta.sources`); o atraso em dias de semana é calculado pela regra 8, mas só aparece como alerta quando passa da tolerância. Em produção, o atraso de toda fonte, todo dia, vai para um painel.
 - **Painel de saúde:** última execução, duração, fontes atrasadas, alertas novos por severidade.
-- **Alerta no canal da mesa** quando a execução falha ou uma fonte passa da tolerância. Hoje só existe o aviso padrão do GitHub quando a Action falha.
+- **Alerta no canal da mesa** quando a execução falha ou uma fonte passa da tolerância. Hoje só existe o aviso padrão do GitHub quando a Action falha, e o log do cron da VPS, que ninguém lê sem entrar na máquina.
 
 ## 6. Governança
 
-- **Dicionário de dados.** Cada campo publicado com unidade, fonte e coluna de origem. Exemplo: `pct_cdi_12m` é fração, razão de retornos acumulados, vazia com menos de 12 meses.
+- **Dicionário de dados.** Cada campo publicado com unidade, fonte e coluna de origem. Exemplo: `pct_cdi_12m` é fração, razão de retornos acumulados, vazia com menos de 12 meses, com a série parada há mais de 7 dias ou com CDI do período não positivo.
 - **Versão das fórmulas.** Um número de versão do cálculo gravado junto de cada publicação. Quando um limiar muda, dá para saber qual versão gerou cada número.
-- **Reprodutibilidade por data de referência.** Com o bruto imutável e o código versionado, dá para recalcular exatamente o que a mesa viu em qualquer dia. Hoje o histórico do git dá a foto do JSON, mas não garante o recálculo, porque o bruto antigo não é guardado.
-- **Cadastro por data.** Guardar a foto diária do cadastro, para que uma mudança de classificação não reescreva o passado.
+- **Reprodutibilidade por data de referência.** Hoje já dá para recalcular o que a mesa viu num dia: o commit daquele dia tem o código e o Parquet, e as etapas de cálculo, qualidade e publicação não leem o bruto (ver 1). Falta o passo manual virar rotina, com a data de referência como parâmetro do orquestrador. O bruto imutável serve para outra coisa: derivar de novo o passado com CNPJs ou colunas que o Parquet não guardou.
+- **Cadastro por data.** Guardar a foto diária do cadastro, para que uma mudança de classificação não reescreva o passado. Hoje só o snapshot do dia fica em `data/raw`, e o `registry.parquet` versionado é a única foto antiga.
 
 ## 7. Extensões
 
