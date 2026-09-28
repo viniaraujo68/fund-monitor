@@ -2,6 +2,7 @@ import io
 import logging
 import zipfile
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -31,6 +32,14 @@ EXPECTED_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class DailyTarget:
+    name: str
+    cnpjs: frozenset[str]
+    directory: Path
+    columns: tuple[str, ...] | None = None
+
+
 def months_between(start: date, end: date) -> list[date]:
     months = []
     current = date(start.year, start.month, 1)
@@ -46,10 +55,6 @@ def daily_url(month: date) -> str:
 
 def daily_raw_path(month: date) -> Path:
     return config.DAILY_RAW_DIR / f"inf_diario_fi_{month:%Y%m}.zip"
-
-
-def daily_parquet_path(month: date) -> Path:
-    return config.DAILY_PARQUET_DIR / f"{month:%Y%m}.parquet"
 
 
 def mask_cnpj(cnpj: str) -> str:
@@ -96,7 +101,17 @@ def normalize_daily(frame: pl.DataFrame) -> pl.DataFrame:
     return normalized.sort("cnpj", "subclass_id", "date", nulls_last=False)
 
 
-def collect_month(month: date, cnpjs: set[str], reference_month: date) -> pl.DataFrame | None:
+def write_target(frame: pl.DataFrame, target: DailyTarget, month: date) -> pl.DataFrame:
+    part = frame.filter(pl.col("cnpj").is_in(target.cnpjs))
+    if target.columns is not None:
+        part = part.select(target.columns)
+    target.directory.mkdir(parents=True, exist_ok=True)
+    part.write_parquet(target.directory / f"{month:%Y%m}.parquet", compression="zstd")
+    logger.info("daily %s %s: %d rows, %d classes", target.name, f"{month:%Y-%m}", part.height, part["cnpj"].n_unique())
+    return part
+
+
+def collect_month(month: date, targets: list[DailyTarget], reference_month: date) -> dict[str, pl.DataFrame] | None:
     raw_path = daily_raw_path(month)
     try:
         download_if_changed(daily_url(month), raw_path)
@@ -105,18 +120,14 @@ def collect_month(month: date, cnpjs: set[str], reference_month: date) -> pl.Dat
             logger.warning("daily report for %s is not published yet", f"{month:%Y-%m}")
             return None
         raise
-    parquet_path = daily_parquet_path(month)
-    frame = read_daily_zip(raw_path, cnpjs)
-    parquet_path.parent.mkdir(parents=True, exist_ok=True)
-    frame.write_parquet(parquet_path, compression="zstd")
-    logger.info("daily %s: %d rows, %d classes", f"{month:%Y-%m}", frame.height, frame["cnpj"].n_unique())
-    return frame
+    frame = read_daily_zip(raw_path, set().union(*(target.cnpjs for target in targets)))
+    return {target.name: write_target(frame, target, month) for target in targets}
 
 
-def collect_daily(start: date, reference_date: date, cnpjs: set[str]) -> list[date]:
+def collect_daily(start: date, reference_date: date, targets: list[DailyTarget]) -> list[date]:
     reference_month = date(reference_date.year, reference_date.month, 1)
     collected = []
     for month in months_between(start, reference_month):
-        if collect_month(month, cnpjs, reference_month) is not None:
+        if collect_month(month, targets, reference_month) is not None:
             collected.append(month)
     return collected

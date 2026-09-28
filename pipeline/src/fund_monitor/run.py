@@ -8,9 +8,14 @@ from fund_monitor.calc.engine import calculate, write_metrics
 from fund_monitor.collect.anbima_ima import collect_ima
 from fund_monitor.collect.b3_ibovespa import collect_ibovespa
 from fund_monitor.collect.bcb_sgs import collect_bcb
-from fund_monitor.collect.cvm_daily import collect_daily
+from fund_monitor.collect.cvm_daily import DailyTarget, collect_daily
 from fund_monitor.collect.cvm_registry import collect_registry
-from fund_monitor.universe import GENERAL_PUBLIC, select_manager_series, select_monitored_series
+from fund_monitor.universe import (
+    GENERAL_PUBLIC,
+    select_manager_series,
+    select_monitored_series,
+    select_peer_universe,
+)
 
 STAGES = ("collect", "calc")
 REFERENCE_DATE = date.today()
@@ -35,8 +40,13 @@ def run_collect_cvm(reference_date: date) -> None:
         monitored.height,
         monitored.filter(pl.col("target_audience") == GENERAL_PUBLIC).height,
     )
-    cnpjs = set(manager_series["cnpj"].unique())
-    months = collect_daily(config.WINDOW_START, reference_date, cnpjs)
+    peers = select_peer_universe(registry, config.MANAGER_CNPJ)
+    logger.info("peers: %d candidate series in %d classes", peers.height, peers["cnpj"].n_unique())
+    targets = [
+        DailyTarget("manager", frozenset(manager_series["cnpj"]), config.DAILY_PARQUET_DIR),
+        DailyTarget("peers", frozenset(peers["cnpj"]), config.PEER_DAILY_PARQUET_DIR, config.PEER_DAILY_COLUMNS),
+    ]
+    months = collect_daily(config.WINDOW_START, reference_date, targets)
     logger.info("daily reports collected for %d months", len(months))
 
 

@@ -17,6 +17,8 @@ REGISTRY_RAW_DIR = RAW_DIR / "cvm" / "registry"
 DAILY_RAW_DIR = RAW_DIR / "cvm" / "daily"
 REGISTRY_PARQUET = PARQUET_DIR / "registry.parquet"
 DAILY_PARQUET_DIR = PARQUET_DIR / "daily"
+PEER_DAILY_PARQUET_DIR = PARQUET_DIR / "peers_daily"
+PEER_DAILY_COLUMNS = ("cnpj", "subclass_id", "date", "report_type", "quota_value", "net_assets")
 
 BCB_SGS_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{series_id}/dados"
 ANBIMA_IMA_URL = "https://www.anbima.com.br/informacoes/ima/ima-sh-down.asp"

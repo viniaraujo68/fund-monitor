@@ -24,8 +24,14 @@ def daily() -> pl.DataFrame:
 @pytest.fixture
 def data_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(config, "DAILY_RAW_DIR", tmp_path / "raw")
-    monkeypatch.setattr(config, "DAILY_PARQUET_DIR", tmp_path / "parquet")
     return tmp_path
+
+
+def targets(root: Path) -> list[cvm_daily.DailyTarget]:
+    return [
+        cvm_daily.DailyTarget("manager", frozenset(SELECTED), root / "manager"),
+        cvm_daily.DailyTarget("peers", frozenset({"04820026000137"}), root / "peers", ("cnpj", "date", "quota_value")),
+    ]
 
 
 def fake_download(url: str, destination: Path) -> bool:
@@ -88,20 +94,24 @@ def test_rejects_unexpected_header() -> None:
         cvm_daily.filter_lines(["CNPJ_FUNDO;DT_COMPTC\n"], SELECTED)
 
 
-def test_collect_month_writes_parquet(data_dirs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_collect_month_writes_one_parquet_per_target(data_dirs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cvm_daily, "download_if_changed", fake_download)
-    frame = cvm_daily.collect_month(AUGUST, SELECTED, reference_month=date(2026, 9, 1))
-    written = pl.read_parquet(data_dirs / "parquet" / "202608.parquet")
-    assert frame is not None
-    assert written.equals(frame)
+    frames = cvm_daily.collect_month(AUGUST, targets(data_dirs), reference_month=date(2026, 9, 1))
+    manager = pl.read_parquet(data_dirs / "manager" / "202608.parquet")
+    peers = pl.read_parquet(data_dirs / "peers" / "202608.parquet")
+    assert frames is not None
+    assert manager.equals(frames["manager"])
+    assert manager.height == 44
+    assert peers.columns == ["cnpj", "date", "quota_value"]
+    assert peers.height == 11
 
 
 def test_unpublished_reference_month_is_skipped(data_dirs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cvm_daily, "download_if_changed", not_found)
-    assert cvm_daily.collect_month(AUGUST, SELECTED, reference_month=AUGUST) is None
+    assert cvm_daily.collect_month(AUGUST, targets(data_dirs), reference_month=AUGUST) is None
 
 
 def test_missing_past_month_fails(data_dirs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cvm_daily, "download_if_changed", not_found)
     with pytest.raises(httpx.HTTPStatusError):
-        cvm_daily.collect_month(AUGUST, SELECTED, reference_month=date(2026, 9, 1))
+        cvm_daily.collect_month(AUGUST, targets(data_dirs), reference_month=date(2026, 9, 1))

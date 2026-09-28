@@ -94,3 +94,33 @@ def test_monitored_series_excludes_exclusive(registry: pl.DataFrame) -> None:
         ("04820026000137", None),
         (DIVIDENDS_CNPJ, "9WCV01767643284"),
     }
+
+
+def with_subclass_status(registry: pl.DataFrame, cnpj: str, status: str, exclusive: bool | None = None) -> pl.DataFrame:
+    target = pl.col("cnpj") == cnpj
+    changed = registry.with_columns(pl.when(target).then(pl.lit(status)).otherwise(pl.col("subclass_status")).alias("subclass_status"))
+    if exclusive is not None:
+        changed = changed.with_columns(
+            pl.when(target).then(pl.lit(exclusive)).otherwise(pl.col("exclusive")).alias("exclusive"),
+            pl.when(target).then(pl.lit("Público Geral")).otherwise(pl.col("target_audience")).alias("target_audience"),
+        )
+    return changed
+
+
+def test_class_waiting_for_its_subclasses_is_monitored_as_the_class(registry: pl.DataFrame) -> None:
+    waiting = with_subclass_status(registry, DIVIDENDS_CNPJ, "Fase Pré-Operacional", exclusive=False)
+    monitored = select_monitored_series(waiting, ICATU_VANGUARDA)
+    assert (DIVIDENDS_CNPJ, None) in series_keys(monitored)
+    assert not any(key[0] == DIVIDENDS_CNPJ and key[1] for key in series_keys(monitored))
+    row = monitored.filter(pl.col("cnpj") == DIVIDENDS_CNPJ).row(0, named=True)
+    assert (row["exclusive"], row["target_audience"]) == (False, "Público Geral")
+
+
+def test_waiting_class_with_disagreeing_subclasses_is_not_monitored(registry: pl.DataFrame) -> None:
+    waiting = with_subclass_status(registry, DIVIDENDS_CNPJ, "Fase Pré-Operacional")
+    assert (DIVIDENDS_CNPJ, None) in series_keys(select_manager_series(waiting, ICATU_VANGUARDA))
+    assert DIVIDENDS_CNPJ not in {key[0] for key in series_keys(select_monitored_series(waiting, ICATU_VANGUARDA))}
+
+
+def test_class_with_an_operational_subclass_is_not_duplicated(registry: pl.DataFrame) -> None:
+    assert (DIVIDENDS_CNPJ, None) not in series_keys(select_manager_series(registry, ICATU_VANGUARDA))
