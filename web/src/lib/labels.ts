@@ -25,6 +25,13 @@ export const SEVERITY_LABELS: Record<Severity, string> = {
   info: "Informativo",
 };
 
+export const SEVERITY_BADGE_CLASS: Record<Severity, string> = {
+  high: "badge-error",
+  medium: "badge-warning",
+  low: "",
+  info: "",
+};
+
 const SEVERITY_COUNT_WORDS: Record<Severity, [string, string]> = {
   high: ["alta", "altas"],
   medium: ["média", "médias"],
@@ -49,6 +56,10 @@ const lookup = (labels: Record<string, string>, key: string): string => labels[k
 
 export const benchmarkLabel = (key: string): string => lookup(BENCHMARK_LABELS, key);
 
+const listFormat = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+
+export const benchmarkList = (keys: string[]): string => listFormat.format(keys.map(benchmarkLabel));
+
 export const windowLabel = (key: string): string => lookup(WINDOW_LABELS, key);
 
 export const sourceLabel = (key: string): string => lookup(SOURCE_LABELS, key);
@@ -58,6 +69,9 @@ export const isSeverity = (value: string): value is Severity =>
 
 export const severityLabel = (key: string): string =>
   isSeverity(key) ? SEVERITY_LABELS[key] : key;
+
+export const severityBadgeClass = (key: string): string =>
+  isSeverity(key) ? SEVERITY_BADGE_CLASS[key] : "";
 
 export const severityCountWord = (key: Severity, count: number): string =>
   SEVERITY_COUNT_WORDS[key][count === 1 ? 0 : 1];

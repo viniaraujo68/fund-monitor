@@ -1,16 +1,9 @@
 <script lang="ts">
   import type { Meta } from "$lib/data/types";
   import { date, datetime, integer } from "$lib/format";
-  import { SEVERITIES, severityCountWord, sourceLabel, type Severity } from "$lib/labels";
+  import { SEVERITIES, SEVERITY_BADGE_CLASS, severityCountWord, sourceLabel } from "$lib/labels";
 
   const { meta }: { meta: Meta } = $props();
-
-  const BADGE_CLASS: Record<Severity, string> = {
-    high: "badge-error",
-    medium: "badge-warning",
-    low: "",
-    info: "",
-  };
 
   const severities = $derived(
     SEVERITIES.map((severity) => ({
@@ -44,7 +37,7 @@
     </div>
     <ul class="flex flex-wrap items-center gap-1.5" aria-label="Alertas de qualidade por severidade">
       {#each severities as entry (entry.severity)}
-        <li class={["badge badge-sm tabular-nums", BADGE_CLASS[entry.severity]]}>
+        <li class={["badge badge-sm tabular-nums", SEVERITY_BADGE_CLASS[entry.severity]]}>
           {integer(entry.count)}
           {severityCountWord(entry.severity, entry.count)}
         </li>

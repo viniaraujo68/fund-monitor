@@ -16,6 +16,7 @@
     money,
     moneyCompact,
     monthLabel,
+    peerRank,
     percent2,
     ratio2,
   } from "$lib/format";
@@ -131,11 +132,6 @@
       .join(" "),
   );
 
-  const peerLabel = (fund: FundSummary): string =>
-    fund.peer_return_percentile_12m === null || fund.peer_count === 0
-      ? DASH
-      : `${integer(Math.round(fund.peer_return_percentile_12m * 100))}º de ${integer(fund.peer_count)}`;
-
   const alertRank = (fund: FundSummary): number | null =>
     fund.issues.high + fund.issues.medium === 0
       ? null
@@ -168,6 +164,7 @@
     {
       key: "target_audience",
       label: "Público",
+      hiddenByDefault: true,
       class: "whitespace-nowrap",
       value: (fund) => fund.target_audience ?? DASH,
       sortBy: (fund) => fund.target_audience,
@@ -241,7 +238,7 @@
       label: "Pares",
       numeric: true,
       class: "whitespace-nowrap",
-      value: peerLabel,
+      value: (fund) => peerRank(fund.peer_return_percentile_12m, fund.peer_count),
       sortBy: (fund) => fund.peer_return_percentile_12m,
     },
     {
