@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import polars as pl
 
-from fund_monitor.calc.series import aggregate_rows, deduplicate_reports, quota_series
+from fund_monitor.calc.series import aggregate_rows, complete_as_of, deduplicate_reports, quota_series
 
 CNPJ = "44917374000141"
 DAYS = [date(2025, 6, 12), date(2025, 6, 13), date(2025, 6, 16), date(2025, 6, 17), date(2025, 6, 18)]
@@ -83,3 +83,10 @@ def test_new_regime_report_wins_over_legacy_on_same_day() -> None:
     assert first_day.height == 1
     assert first_day["report_type"].item() == "CLASSES - FIF"
     assert float(first_day["net_assets"].item()) == 300
+
+
+def test_as_of_skips_a_day_only_a_few_series_reported() -> None:
+    days = [date(2026, 9, 22), date(2026, 9, 23), date(2026, 9, 24), date(2026, 9, 25)]
+    rows = [(f"S{n}", day) for n in range(10) for day in days[:3]] + [("S0", days[3])]
+    quotas = pl.DataFrame(rows, schema={"series_id": pl.String, "date": pl.Date}, orient="row")
+    assert complete_as_of(quotas) == date(2026, 9, 24)

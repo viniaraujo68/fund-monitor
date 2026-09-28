@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import polars as pl
@@ -6,6 +6,8 @@ import polars as pl
 SERIES_KEY = ["cnpj", "subclass_id"]
 PREFERRED_REPORT_TYPE = "CLASSES - FIF"
 MAX_HANDOFF_GAP = timedelta(days=7)
+COMPLETE_DAY_SHARE = 0.9
+COVERAGE_LOOKBACK_DAYS = 20
 QUOTA_COLUMNS = ["series_id", "cnpj", "subclass_id", "date", "quota_value", "inherited"]
 
 
@@ -76,3 +78,10 @@ def aggregate_rows(daily: pl.DataFrame, series: pl.DataFrame) -> pl.DataFrame:
     )
     own = daily.join(series.select(SERIES_KEY).unique(), on=SERIES_KEY, nulls_equal=True)
     return pl.concat([own, before_split.select(own.columns)]).unique().sort("cnpj", "date")
+
+
+def complete_as_of(quotas: pl.DataFrame) -> date:
+    coverage = quotas.group_by("date").agg(pl.col("series_id").n_unique().alias("series")).sort("date")
+    recent = coverage.tail(COVERAGE_LOOKBACK_DAYS)
+    threshold = COMPLETE_DAY_SHARE * recent["series"].max()
+    return recent.filter(pl.col("series") >= threshold)["date"].max()
