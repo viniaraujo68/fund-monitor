@@ -22,6 +22,7 @@
     height = "h-72",
     points = true,
     fill = false,
+    max,
     insufficientText = "Ainda não há pontos suficientes para desenhar a linha.",
   }: {
     labels: string[];
@@ -33,6 +34,7 @@
     height?: string;
     points?: boolean;
     fill?: boolean;
+    max?: number;
     insufficientText?: string;
   } = $props();
 
@@ -49,6 +51,7 @@
     const lines = series;
     const withPoints = points;
     const withFill = fill;
+    const ceiling = max;
     void theme.dark;
 
     if (element === undefined || container === undefined) return;
@@ -130,6 +133,7 @@
             },
           },
           y: {
+            max: ceiling,
             grid: { color: colors.grid },
             border: { display: false },
             title:
