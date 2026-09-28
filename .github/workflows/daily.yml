@@ -2,7 +2,7 @@ name: daily
 
 on:
   schedule:
-    - cron: "0 23 * * 1-5"
+    - cron: "17 23 * * 1-5"
   workflow_dispatch:
 
 concurrency:
@@ -13,6 +13,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      TZ: America/Sao_Paulo
     permissions:
       contents: write
     steps:
@@ -41,11 +43,11 @@ jobs:
 
       - name: Run pipeline tests
         working-directory: pipeline
-        run: uv run pytest -q
+        run: uv run --frozen pytest -q
 
       - name: Run pipeline
         working-directory: pipeline
-        run: uv run python -m fund_monitor.run
+        run: uv run --frozen python -m fund_monitor.run
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -62,6 +64,9 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Check site build output
+        run: test -f web/build/index.html
+
       - name: Commit updated data
         run: |
           git add data/parquet data/site
@@ -70,8 +75,8 @@ jobs:
             exit 0
           fi
           as_of=$(jq -r .as_of data/site/meta.json)
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "Atualiza dados até ${as_of}"
-          git pull --rebase origin main
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Atualiza dados até ${as_of}"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

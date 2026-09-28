@@ -1,6 +1,21 @@
 :80 {
 	root * /srv
 	encode gzip
+
+	@trailing path_regexp trailing ^(.+)/$
+	redir @trailing {re.trailing.1}{?query} 308
+
+	@immutable path /_app/immutable/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+	@mutable not path /_app/immutable/*
+	header @mutable Cache-Control "no-cache"
+
 	try_files {path} {path}.html
 	file_server
+
+	handle_errors 404 {
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-cache"
+		respond `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Página não encontrada</title><p>Este endereço não existe ou mudou de lugar. <a href="/">Voltar à visão geral</a>.</p></html>` 404
+	}
 }
