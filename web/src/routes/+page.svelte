@@ -5,6 +5,7 @@
   import { classificationSlot } from "$lib/charts/palette";
   import BarChart, { type BarSeries } from "$lib/components/BarChart.svelte";
   import ChartCard from "$lib/components/ChartCard.svelte";
+  import HighlightsStrip from "$lib/components/HighlightsStrip.svelte";
   import PageFrame from "$lib/components/PageFrame.svelte";
   import QualityStrip from "$lib/components/QualityStrip.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
@@ -332,6 +333,8 @@
   wide
 >
   <QualityStrip meta={data.meta} />
+
+  <HighlightsStrip highlights={data.highlights} />
 
   <section
     class="card bg-base-100 border-base-content/10 border"

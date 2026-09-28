@@ -1,13 +1,16 @@
 import aggregatesJson from "$data/aggregates.json";
 import fundsJson from "$data/funds.json";
 import metaJson from "$data/meta.json";
-import type { Aggregates, FundDetail, FundSummary, Meta } from "$lib/data/types";
+import qualityJson from "$data/quality.json";
+import type { Aggregates, FundDetail, FundSummary, Meta, QualityDocument } from "$lib/data/types";
 
 export const meta = metaJson as Meta;
 
 export const funds = fundsJson as FundSummary[];
 
 export const aggregates = aggregatesJson as Aggregates;
+
+export const quality = qualityJson as QualityDocument;
 
 const detailFiles = import.meta.glob<FundDetail>("$data/funds/*.json", {
   eager: true,
