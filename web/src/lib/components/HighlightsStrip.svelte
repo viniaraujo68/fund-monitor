@@ -206,7 +206,7 @@
 
     {#if highlights.incentivized}
       <article
-        class="card bg-base-100 border md:col-span-2"
+        class="card bg-base-100 border self-start md:col-span-2"
         style:border-color="var(--color-warning)"
         aria-labelledby="incentivized-title"
       >
