@@ -29,6 +29,8 @@
     }));
 
   const seriesCount = (count: number): string => (count === 1 ? "série" : "séries");
+
+  const fundCount = (count: number): string => (count === 1 ? "fundo" : "fundos");
 </script>
 
 {#snippet fundLink(fund: HighlightFund)}
@@ -153,10 +155,20 @@
           <div class="flex flex-col gap-0.5">
             <p class="text-sm">
               <span class="text-2xl font-medium tracking-[-0.01em] tabular-nums"
-                >{integer(event.series.length)}</span
+                >{integer(event.cnpjCount)}</span
               >
-              {seriesCount(event.series.length)} caíram no mesmo dia
+              {fundCount(event.cnpjCount)}
+              <span class="tabular-nums"
+                >({integer(event.series.length)} {seriesCount(event.series.length)})</span
+              >
+              caíram no mesmo dia
             </p>
+            {#if event.cnpjCount < event.series.length}
+              <p class="text-base-content/70 text-xs">
+                Subclasses criadas depois do evento herdam a cota da classe, e a mesma queda aparece em
+                mais de uma série.
+              </p>
+            {/if}
             <p class="text-base-content/70 text-xs">
               Variação da cota entre <span class="tabular-nums">{percent2(event.minChange)}</span> e
               <span class="tabular-nums">{percent2(event.maxChange)}</span>.
