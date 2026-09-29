@@ -4,6 +4,7 @@ export const BENCHMARK_SLOT: Record<string, number> = {
   cdi: 3,
   ima_b: 0,
   ibov: 2,
+  ibrx: 2,
 };
 
 export const INFLOW_SLOT = 3;

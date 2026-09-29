@@ -2,6 +2,7 @@ export const BENCHMARK_LABELS: Record<string, string> = {
   cdi: "CDI",
   ima_b: "IMA-B",
   ibov: "Ibovespa",
+  ibrx: "IBrX-100",
 };
 
 export const WINDOW_LABELS: Record<string, string> = {
@@ -44,6 +45,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   cdi: "CDI (Bacen)",
   ima_b: "IMA-B (ANBIMA)",
   ibov: "Ibovespa (B3)",
+  ibrx: "IBrX-100 (B3)",
 };
 
 export const CLASSIFICATIONS = ["Renda Fixa", "Multimercado", "Ações"] as const;
