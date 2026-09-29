@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from "$app/paths";
   import { INFLOW_SLOT, OUTFLOW_SLOT } from "$lib/charts/palette";
-  import { date, integer, moneyCompact, peerRank, percent2 } from "$lib/format";
+  import { date, integer, moneyCompact, peerRank, percent2, percentPoints } from "$lib/format";
   import type { FlowHighlight, HighlightFund, Highlights } from "$lib/highlights";
-  import { untreatedInfo } from "$lib/labels";
+  import { benchmarkLabel, untreatedInfo } from "$lib/labels";
   import HorizontalBarChart, { type HorizontalBar } from "./HorizontalBarChart.svelte";
   import StatusBadge from "./StatusBadge.svelte";
 
@@ -73,55 +73,55 @@
   </div>
 
   <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-    {#if highlights.cdi}
-      {@const cdi = highlights.cdi}
+    {#if highlights.benchmark}
+      {@const benchmark = highlights.benchmark}
       <article class="card bg-base-100 border-base-content/10 border">
         <div class="card-body gap-3 p-4 sm:p-5">
-          {@render cardTitle("Contra o CDI em 12 meses", `${UNIVERSE_SCOPE}.`)}
+          {@render cardTitle("Contra o próprio benchmark em 12 meses", `${UNIVERSE_SCOPE}.`)}
           <div class="flex flex-col gap-0.5">
             <p class="text-sm">
               <span class="text-2xl font-medium tracking-[-0.01em] tabular-nums"
-                >{integer(cdi.beating)} de {integer(cdi.measured)}</span
+                >{integer(benchmark.beating)} de {integer(benchmark.measured)}</span
               >
-              {seriesCount(cdi.measured)} renderam acima do CDI
+              {seriesCount(benchmark.measured)} bateram o benchmark
             </p>
-            {#if cdi.cdi12m !== null}
-              <p class="text-base-content/70 text-xs">
-                CDI no período: <span class="tabular-nums">{percent2(cdi.cdi12m)}</span>
-              </p>
-            {/if}
+            <p class="text-base-content/70 text-xs">
+              CDI para DI e multimercado, IMA-B para renda fixa, Ibovespa ou IBrX-100 para ações.
+            </p>
           </div>
-          {#if cdi.leaders.length > 0}
+          {#if benchmark.leaders.length > 0}
             <table class="table-sm table">
-              <caption class="sr-only">Séries que renderam acima do CDI em 12 meses</caption>
+              <caption class="sr-only">Séries que bateram o próprio benchmark em 12 meses</caption>
               <thead>
                 <tr>
                   <th scope="col" class="px-0">Fundo</th>
-                  <th scope="col" class="text-right" style:white-space="nowrap">% CDI</th>
-                  <th scope="col" class="pr-0 text-right">Retorno</th>
+                  <th scope="col">Benchmark</th>
+                  <th scope="col" class="pr-0 text-right">Excesso</th>
                 </tr>
               </thead>
               <tbody>
-                {#each cdi.leaders as leader (leader.seriesId)}
+                {#each benchmark.leaders as leader (leader.seriesId)}
                   <tr>
                     <th scope="row" class="px-0 font-normal">{@render fundLink(leader)}</th>
-                    <td class="text-right whitespace-nowrap tabular-nums"
-                      >{percent2(leader.pctCdi)}</td
-                    >
+                    <td class="whitespace-nowrap">{benchmarkLabel(leader.benchmark)}</td>
                     <td class="pr-0 text-right whitespace-nowrap tabular-nums">
-                      {percent2(leader.return12m)}
+                      {percentPoints(leader.excess)}
                     </td>
                   </tr>
                 {/each}
               </tbody>
             </table>
-            {#if cdi.hiddenLeaders > 0}
+            {#if benchmark.hiddenLeaders > 0}
               <p class="text-base-content/70 grow-0 text-xs tabular-nums">
-                +{integer(cdi.hiddenLeaders)}
-                {seriesCount(cdi.hiddenLeaders)}
+                +{integer(benchmark.hiddenLeaders)}
+                {seriesCount(benchmark.hiddenLeaders)}
               </p>
             {/if}
           {/if}
+          <p class="text-base-content/70 grow-0 text-xs tabular-nums">
+            Contra o CDI: {integer(benchmark.cdiBeating)} de {integer(benchmark.cdiMeasured)}{#if benchmark.cdi12m !== null}
+              · CDI no período {percent2(benchmark.cdi12m)}{/if}.
+          </p>
         </div>
       </article>
     {/if}

@@ -22,17 +22,20 @@ export interface HighlightFund {
   linked: boolean;
 }
 
-export interface CdiLeader extends HighlightFund {
-  pctCdi: number;
+export interface BenchmarkLeader extends HighlightFund {
+  benchmark: string;
+  excess: number;
   return12m: number | null;
 }
 
-export interface CdiHighlight {
+export interface BenchmarkHighlight {
   beating: number;
   measured: number;
-  cdi12m: number | null;
-  leaders: CdiLeader[];
+  leaders: BenchmarkLeader[];
   hiddenLeaders: number;
+  cdiBeating: number;
+  cdiMeasured: number;
+  cdi12m: number | null;
 }
 
 export interface FlowBar extends HighlightFund {
@@ -73,7 +76,7 @@ export interface IncentivizedFund extends HighlightFund {
 
 export interface Highlights {
   asOf: IsoDate;
-  cdi: CdiHighlight | null;
+  benchmark: BenchmarkHighlight | null;
   inflows: FlowHighlight | null;
   outflows: FlowHighlight | null;
   creditEvent: CreditEvent | null;
@@ -92,22 +95,26 @@ const isHighlightUniverse = (fund: FundSummary): boolean =>
 const windowCdi = (funds: FundSummary[], asOf: IsoDate): number | null =>
   funds.find((fund) => fund.last_date === asOf && fund.cdi_12m !== null)?.cdi_12m ?? null;
 
-const buildCdi = (universe: FundSummary[], cdi12m: number | null): CdiHighlight | null => {
-  const measured = universe.filter((fund) => fund.pct_cdi_12m !== null);
+const buildBenchmark = (universe: FundSummary[], cdi12m: number | null): BenchmarkHighlight | null => {
+  const measured = universe.filter((fund) => fund.excess_primary_12m !== null);
   if (measured.length === 0) return null;
   const beating = measured
-    .filter((fund) => (fund.pct_cdi_12m ?? 0) > 1)
-    .sort((a, b) => (b.pct_cdi_12m ?? 0) - (a.pct_cdi_12m ?? 0));
+    .filter((fund) => (fund.excess_primary_12m ?? 0) > 0)
+    .sort((a, b) => (b.excess_primary_12m ?? 0) - (a.excess_primary_12m ?? 0));
+  const cdiMeasured = universe.filter((fund) => fund.pct_cdi_12m !== null);
   return {
     beating: beating.length,
     measured: measured.length,
-    cdi12m,
     leaders: beating.slice(0, LEADER_LIMIT).map((fund) => ({
       ...fundRef(fund),
-      pctCdi: fund.pct_cdi_12m ?? 0,
+      benchmark: fund.primary_benchmark,
+      excess: fund.excess_primary_12m ?? 0,
       return12m: fund.return_12m,
     })),
     hiddenLeaders: Math.max(0, beating.length - LEADER_LIMIT),
+    cdiBeating: cdiMeasured.filter((fund) => (fund.pct_cdi_12m ?? 0) > 1).length,
+    cdiMeasured: cdiMeasured.length,
+    cdi12m,
   };
 };
 
@@ -219,7 +226,7 @@ export const buildHighlights = (
   const universe = funds.filter(isHighlightUniverse);
   return {
     asOf: meta.as_of,
-    cdi: buildCdi(universe, windowCdi(funds, meta.as_of)),
+    benchmark: buildBenchmark(universe, windowCdi(funds, meta.as_of)),
     inflows: buildFlows(universe, 1),
     outflows: buildFlows(universe, -1),
     creditEvent: buildCreditEvent(funds, quality, meta.window_start, meta.as_of),
