@@ -4,8 +4,8 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter(),
-    paths: { base: process.env.BASE_PATH ?? "" },
+    adapter: adapter({ fallback: "404.html" }),
+    paths: { base: process.env.BASE_PATH ?? "", relative: false },
     alias: {
       $data: "../data/site",
       $docs: "../docs",

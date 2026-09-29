@@ -8,4 +8,3 @@ web/.svelte-kit/
 web/build/
 .DS_Store
 PLAN.md
-.env

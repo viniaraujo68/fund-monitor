@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: daily-update
+  group: pages
   cancel-in-progress: false
 
 jobs:
@@ -17,6 +17,11 @@ jobs:
       TZ: America/Sao_Paulo
     permissions:
       contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,24 +54,6 @@ jobs:
         working-directory: pipeline
         run: uv run --frozen python -m fund_monitor.run
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install site dependencies
-        working-directory: web
-        run: npm ci
-
-      - name: Build site
-        working-directory: web
-        run: npm run build
-
-      - name: Check site build output
-        run: test -f web/build/index.html
-
       - name: Commit updated data
         run: |
           git add data/parquet data/site
@@ -80,3 +67,35 @@ jobs:
           git commit -m "Atualiza dados até ${as_of}"
           git pull --rebase origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build site
+        working-directory: web
+        env:
+          BASE_PATH: /fund-monitor
+        run: npm run build
+
+      - name: Check site build output
+        run: test -f web/build/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
