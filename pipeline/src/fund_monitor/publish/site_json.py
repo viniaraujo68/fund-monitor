@@ -198,6 +198,7 @@ class Issue(Contract):
     days: int | None
     value: float | None
     threshold: float | None
+    deviation: float | None
     detail: str | None
     status: str
     note: str | None
@@ -466,6 +467,7 @@ def build_issues(issues: pl.DataFrame, names: dict[str, str]) -> list[Issue]:
             days=row["days"],
             value=rounded(row["value"], RETURN_DIGITS),
             threshold=rounded(row["threshold"], RETURN_DIGITS),
+            deviation=rounded(row["deviation"], RETURN_DIGITS),
             detail=row["detail"],
             status=row["status"],
             note=row["note"],

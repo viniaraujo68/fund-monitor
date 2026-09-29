@@ -163,6 +163,7 @@ export interface Issue {
   days: number | null;
   value: number | null;
   threshold: number | null;
+  deviation: number | null;
   detail: string | null;
   status: IssueStatus;
   note: string | null;

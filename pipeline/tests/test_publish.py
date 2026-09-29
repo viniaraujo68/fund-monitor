@@ -251,6 +251,14 @@ EVENT_DAY = date(2024, 12, 9)
 OTHER_DAY = date(2025, 4, 3)
 
 
+def test_jump_issue_publishes_the_deviation_next_to_the_limit() -> None:
+    issues = jump_issues([("A", EVENT_DAY, "medium", "open", None)]).with_columns(
+        value=pl.lit(-0.002), threshold=pl.lit(0.0023), deviation=pl.lit(-0.00254321)
+    )
+    (issue,) = site_json.build_issues(issues, {"A": "Fundo A"})
+    assert (issue.value, issue.threshold, issue.deviation) == (-0.002, 0.0023, -0.002543)
+
+
 def test_events_group_jumps_of_at_least_three_series() -> None:
     issues = jump_issues(
         [
