@@ -168,6 +168,16 @@
       .join(" "),
   );
 
+  const MANAGER_SHORT_NAME = "Icatu Vanguarda";
+
+  const headline = $derived(
+    data.totals.find((row) => row.scope === "monitored" && !row.structural),
+  );
+
+  const openToInvestigate = $derived(
+    OPEN_SEVERITIES.reduce((sum, level) => sum + (data.meta.quality.open_by_severity[level] ?? 0), 0),
+  );
+
   const alertRank = (fund: FundSummary): number | null =>
     fund.open_issues.high + fund.open_issues.medium === 0
       ? null
@@ -415,6 +425,27 @@
   breadcrumbs={false}
   wide
 >
+  <section class="flex flex-col gap-1" aria-label="Resumo da gestora">
+    <p class="text-base leading-relaxed sm:text-lg">
+      Fundos não exclusivos da {MANAGER_SHORT_NAME}, sem veículos estruturais:
+      <strong class="font-semibold tabular-nums">{moneyCompact(headline?.net_assets)}</strong> de PL e
+      <strong class="font-semibold tabular-nums">{moneyCompact(headline?.net_flow_12m)}</strong> de
+      captação líquida em 12 meses.
+      {#if data.highlights.benchmark !== null}
+        Em Público Geral,
+        <strong class="font-semibold tabular-nums"
+          >{integer(data.highlights.benchmark.beating)} de {integer(data.highlights.benchmark.measured)}</strong
+        >
+        bateram o próprio benchmark em 12 meses.
+      {/if}
+      <strong class="font-semibold tabular-nums">{integer(openToInvestigate)}</strong>
+      {openToInvestigate === 1 ? "alerta a investigar" : "alertas a investigar"}.
+    </p>
+    <p class="text-base-content/70 text-xs">
+      Dados até {date(data.meta.as_of)}, o último dia completo do informe diário da CVM.
+    </p>
+  </section>
+
   <QualityStrip meta={data.meta} />
 
   <HighlightsStrip highlights={data.highlights} />

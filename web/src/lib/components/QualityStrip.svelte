@@ -14,6 +14,8 @@
     })),
   );
 
+  const hasOpenHigh = $derived((meta.quality.open_by_severity.high ?? 0) > 0);
+
   const infoCount = $derived(meta.quality.by_severity.info ?? 0);
 
   const treatedLine = $derived(
@@ -53,7 +55,7 @@
               <li
                 class={[
                   "badge badge-sm tabular-nums",
-                  entry.count > 0 && SEVERITY_BADGE_CLASS[entry.severity],
+                  hasOpenHigh && entry.count > 0 && SEVERITY_BADGE_CLASS[entry.severity],
                 ]}
               >
                 {integer(entry.count)}
