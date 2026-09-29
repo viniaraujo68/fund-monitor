@@ -1,6 +1,6 @@
 import type { Issue } from "$lib/data/types";
 import { date, integer, monthName, percent2, percentShort } from "$lib/format";
-import { sourceLabel } from "$lib/labels";
+import { countsAsOpen, severityRank, sourceLabel } from "$lib/labels";
 
 export const RULE_LABELS: Record<string, string> = {
   missing_report: "Dia sem informe",
@@ -279,3 +279,16 @@ export const issueMeasure = (issue: Issue): IssueMeasure | null => {
 
 export const issueMagnitude = (issue: Issue): number | null =>
   RATIO_RULES.has(issue.rule) && issue.value !== null ? Math.abs(issue.value) : null;
+
+export const isOpenIssue = (issue: Issue): boolean => countsAsOpen(issue.status, issue.severity);
+
+export const triageRank = (issue: Issue): number =>
+  (isOpenIssue(issue) ? 0 : 1) * 10 + severityRank(issue.severity);
+
+export const byTriage = (left: Issue, right: Issue): number =>
+  triageRank(left) - triageRank(right) || (right.date ?? "").localeCompare(left.date ?? "");
+
+export const triageDetail = (note: string | null, treatedOn: string | null): string =>
+  [note, treatedOn === null ? null : `tratado em ${date(treatedOn)}`]
+    .filter((part) => part !== null && part !== "")
+    .join(" · ");

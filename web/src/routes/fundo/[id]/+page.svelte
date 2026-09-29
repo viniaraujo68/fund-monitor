@@ -37,7 +37,7 @@
   <DrawdownCard {detail} />
   <MonthlyFlowCard {detail} />
   <PeerPositionCard peers={detail.peers} {summary} />
-  <IssueList issues={detail.issues} />
+  <IssueList issues={detail.issues} openIssues={summary.open_issues} />
   <p class="text-base-content/70 text-xs">
     Fonte: CVM (cadastro e informe diário), Bacen SGS, ANBIMA, B3. Dados até {date(data.meta.as_of)}.
   </p>

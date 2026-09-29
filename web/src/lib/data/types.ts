@@ -11,6 +11,9 @@ export interface QualitySummary {
   checked_days: number;
   by_severity: Record<string, number>;
   by_rule: Record<string, number>;
+  open_by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  treated: number;
 }
 
 export interface UniverseCounts {
@@ -76,6 +79,7 @@ export interface FundSummary {
   peer_count: number;
   peer_return_percentile_12m: number | null;
   issues: IssueCounts;
+  open_issues: IssueCounts;
 }
 
 export interface WindowRow {
@@ -147,6 +151,8 @@ export interface PeerPosition {
   metrics: Record<string, PeerMetric>;
 }
 
+export type IssueStatus = "open" | "explained" | "source_error" | "limitation";
+
 export interface Issue {
   rule: string;
   severity: string;
@@ -158,6 +164,9 @@ export interface Issue {
   value: number | null;
   threshold: number | null;
   detail: string | null;
+  status: IssueStatus;
+  note: string | null;
+  treated_on: IsoDate | null;
 }
 
 export interface FundDetail {
@@ -195,7 +204,19 @@ export interface Aggregates {
   monthly: AggregateRow[];
 }
 
+export interface QualityEvent {
+  rule: string;
+  date: IsoDate;
+  severity: string;
+  status: string;
+  note: string | null;
+  series_ids: string[];
+  display_names: string[];
+  cnpj_count: number;
+}
+
 export interface QualityDocument {
   summary: QualitySummary;
   issues: Issue[];
+  events: QualityEvent[];
 }

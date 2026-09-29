@@ -3,7 +3,9 @@
   import { INFLOW_SLOT, OUTFLOW_SLOT } from "$lib/charts/palette";
   import { date, integer, moneyCompact, peerRank, percent2 } from "$lib/format";
   import type { FlowHighlight, HighlightFund, Highlights } from "$lib/highlights";
+  import { untreatedInfo } from "$lib/labels";
   import HorizontalBarChart, { type HorizontalBar } from "./HorizontalBarChart.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
 
   const { highlights }: { highlights: Highlights } = $props();
 
@@ -160,6 +162,17 @@
               <span class="tabular-nums">{percent2(event.maxChange)}</span>.
             </p>
           </div>
+          {#if event.triage !== null && !untreatedInfo(event.triage.status, event.triage.severity)}
+            <div class="flex flex-col gap-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-base-content/70 text-xs">Situação:</span>
+                <StatusBadge status={event.triage.status} />
+              </div>
+              {#if event.triage.note !== null}
+                <p class="text-sm">{event.triage.note}</p>
+              {/if}
+            </div>
+          {/if}
           <ul
             class="flex flex-col gap-1 text-sm"
             aria-label={`Séries com queda isolada em ${date(event.date)}`}

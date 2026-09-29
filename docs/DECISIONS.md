@@ -450,8 +450,10 @@ Regras que valem para todas as telas:
 
 ### 6.3 Qualidade
 
-- **Tiles por severidade** e a tabela **Alertas por regra**, com as nove regras, o que cada uma detecta, o limiar, a severidade típica e o número de alertas, zero inclusive.
-- **Lista de alertas** do universo monitorado, filtrável por regra, severidade e fundo, e com busca livre no texto do alerta, no nome e no CNPJ da série. Os filtros são mantidos ao voltar para a página. A coluna "Valor / limiar" mostra, no salto de cota, o retorno e o limite que disparou (absoluto, piso ou 5σ) e, no PL sem explicação, o resíduo e o limite.
+- **Situação de cada alerta.** Alertas marcam, não excluem, e tratar um alerta não altera o dado. Cada alerta tem uma situação: aberto (ainda precisa de leitura), explicado, erro da fonte ou limitação do informe. Alerta informativo nunca conta como aberto.
+- **Tiles de abertos por severidade** (alta, média, baixa), um tile **Tratados** com a divisão por situação e, abaixo, a contagem de informativos. Em seguida a tabela **Alertas por regra**, com as nove regras, o que cada uma detecta, o limiar, a severidade típica e o número de alertas, zero inclusive.
+- **Lista de alertas** do universo monitorado, filtrável por situação (Abertos, o padrão; Tratados; Informativos; Todos), regra e fundo, e com busca livre no texto do alerta, na nota, no nome e no CNPJ da série. Os filtros são mantidos ao voltar para a página. A lista abre com os abertos primeiro, depois por severidade e data mais recente. A coluna "Situação" mostra a nota e a data do tratamento ao passar o mouse; no celular a nota aparece no cartão. A coluna "Valor / limiar" mostra, no salto de cota, o retorno e o limite que disparou (absoluto, piso ou 5σ) e, no PL sem explicação, o resíduo e o limite.
+- **Eventos**, entre os filtros e a lista: um cartão por dia com salto de cota em 3 ou mais séries, com a data, séries e CNPJs, severidade, situação, nota e as séries com link. Seguem os mesmos filtros. O evento informativo aparece como "Dia de mercado", só em Informativos e Todos.
 - O fundo tem link para a página dele quando a série é monitorada. Os alertas de fonte atrasada (regra 8) não têm série e mostram um traço; um alerta de cadastro de série que não está entre as monitoradas mostra o identificador sem link.
 
 ### 6.4 Metodologia

@@ -1,4 +1,11 @@
-import type { FundSummary, IsoDate, Issue, Meta, QualityDocument } from "$lib/data/types";
+import type {
+  FundSummary,
+  IsoDate,
+  Issue,
+  Meta,
+  QualityDocument,
+  QualityEvent,
+} from "$lib/data/types";
 import { GENERAL_PUBLIC } from "$lib/labels";
 
 const LEADER_LIMIT = 6;
@@ -42,8 +49,15 @@ export interface EventSeries extends HighlightFund {
   change: number | null;
 }
 
+export interface EventTriage {
+  status: string;
+  severity: string;
+  note: string | null;
+}
+
 export interface CreditEvent {
   date: IsoDate;
+  triage: EventTriage | null;
   windowStart: IsoDate;
   cnpjCount: number;
   series: EventSeries[];
@@ -130,6 +144,13 @@ const distinctCnpjs = (drops: Map<string, IsolatedDrop>): number =>
 const totalDrop = (drops: Map<string, IsolatedDrop>): number =>
   [...drops.values()].reduce((sum, issue) => sum + Math.abs(issue.value), 0);
 
+const eventTriage = (events: QualityEvent[], day: IsoDate): EventTriage | null => {
+  const event = events.find((entry) => entry.rule === EVENT_RULE && entry.date === day);
+  return event === undefined
+    ? null
+    : { status: event.status, severity: event.severity, note: event.note };
+};
+
 const buildCreditEvent = (
   funds: FundSummary[],
   quality: QualityDocument,
@@ -168,6 +189,7 @@ const buildCreditEvent = (
   const changes = series.flatMap((entry) => (entry.change === null ? [] : [entry.change]));
   return {
     date: busiest[0],
+    triage: eventTriage(quality.events, busiest[0]),
     windowStart,
     cnpjCount: distinctCnpjs(busiest[1]),
     series,

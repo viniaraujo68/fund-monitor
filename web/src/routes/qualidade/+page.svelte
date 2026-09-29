@@ -12,9 +12,11 @@
   import SeverityBadge from "$lib/components/SeverityBadge.svelte";
   import SourceDates from "$lib/components/SourceDates.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
-  import type { Issue } from "$lib/data/types";
-  import { cnpj, DASH, integer } from "$lib/format";
+  import StatusBadge from "$lib/components/StatusBadge.svelte";
+  import type { Issue, QualityEvent } from "$lib/data/types";
+  import { cnpj, DASH, date, integer } from "$lib/format";
   import {
+    byTriage,
     issueMagnitude,
     issueMeasure,
     issueSpan,
@@ -22,8 +24,19 @@
     RULE_DESCRIPTIONS,
     RULES,
     ruleLabel,
+    triageDetail,
+    triageRank,
   } from "$lib/issues";
-  import { ALL, SEVERITIES, SEVERITY_LABELS, severityRank, type Severity } from "$lib/labels";
+  import {
+    ALL,
+    countsAsOpen,
+    OPEN_SEVERITIES,
+    SEVERITY_LABELS,
+    severityRank,
+    TREATED_STATUSES,
+    untreatedInfo,
+    type Severity,
+  } from "$lib/labels";
   import { TABLE_LABELS } from "$lib/table";
   import type { Snapshot } from "./$types";
 
@@ -32,6 +45,7 @@
   interface Row extends Issue {
     index: number;
     text: string;
+    triage: string;
     haystack: string;
   }
 
@@ -40,7 +54,11 @@
     count: number;
   }
 
-  type SeverityFilter = Severity | typeof ALL;
+  type View = "open" | "treated" | "info" | typeof ALL;
+
+  const DEFAULT_VIEW: View = "open";
+
+  const EVENT_LIST_OPEN_LIMIT = 6;
 
   const SEVERITY_HINTS: Record<Severity, string> = {
     high: "linha zerada (descartada do cálculo) ou fonte muito atrasada",
@@ -56,10 +74,32 @@
     info: "neutral",
   };
 
-  const SEVERITY_OPTIONS: { id: SeverityFilter; label: string }[] = [
-    { id: ALL, label: "Todas" },
-    ...SEVERITIES.map((level) => ({ id: level, label: SEVERITY_LABELS[level] })),
+  const TREATED_HINT_LABELS: Record<(typeof TREATED_STATUSES)[number], string> = {
+    explained: "explicados",
+    source_error: "erro da fonte",
+    limitation: "limitação",
+  };
+
+  const VIEW_OPTIONS: { id: View; label: string }[] = [
+    { id: "open", label: "Abertos" },
+    { id: "treated", label: "Tratados" },
+    { id: "info", label: "Informativos" },
+    { id: ALL, label: "Todos" },
   ];
+
+  const EMPTY_MESSAGES: Record<View, string> = {
+    open: "Nenhum alerta aberto. Tudo o que o monitor achou está tratado.",
+    treated: "Nenhum alerta tratado ainda.",
+    info: "Nenhum alerta informativo nesta rodada.",
+    all: "Nenhum alerta nesta rodada.",
+  };
+
+  const inView = (item: { status: string; severity: string }, current: View): boolean => {
+    if (current === "open") return countsAsOpen(item.status, item.severity);
+    if (current === "treated") return item.status !== "open";
+    if (current === "info") return item.severity === "info";
+    return true;
+  };
 
   const RULE_OPTIONS: SelectOption[] = [
     { value: ALL, label: "Todas" },
@@ -83,12 +123,13 @@
           ...issue,
           index,
           text,
+          triage: triageDetail(issue.note, issue.treated_on),
           haystack: normalizeForSearch(
-            `${text} ${issue.display_name ?? ""} ${ruleLabel(issue.rule)} ${seriesTerms(issue.series_id)}`,
+            `${text} ${issue.display_name ?? ""} ${ruleLabel(issue.rule)} ${seriesTerms(issue.series_id)} ${issue.note ?? ""}`,
           ),
         };
       })
-      .sort((left, right) => (right.date ?? "").localeCompare(left.date ?? "")),
+      .sort(byTriage),
   );
 
   const fundOptions = $derived<SelectOption[]>(
@@ -107,23 +148,31 @@
     RULES.map((rule) => ({ rule, count: summary.by_rule[rule] ?? 0 })),
   );
 
+  const treatedHint = $derived(
+    TREATED_STATUSES.map(
+      (status) => `${TREATED_HINT_LABELS[status]} ${integer(summary.by_status[status] ?? 0)}`,
+    ).join(" · "),
+  );
+
+  const infoCount = $derived(summary.by_severity.info ?? 0);
+
   let rule = $state<string | null>(ALL);
-  let severity = $state<SeverityFilter>(ALL);
+  let view = $state<View>(DEFAULT_VIEW);
   let fund = $state<string | null>(null);
   let query = $state("");
 
   interface Filters {
     rule: string | null;
-    severity: SeverityFilter;
+    view: View;
     fund: string | null;
     query: string;
   }
 
   export const snapshot: Snapshot<Filters> = {
-    capture: () => ({ rule, severity, fund, query }),
+    capture: () => ({ rule, view, fund, query }),
     restore: (filters) => {
       rule = filters.rule;
-      severity = filters.severity;
+      view = filters.view;
       fund = filters.fund;
       query = filters.query;
     },
@@ -135,25 +184,73 @@
     rows.filter(
       (row) =>
         (rule === null || rule === ALL || row.rule === rule) &&
-        (severity === ALL || row.severity === severity) &&
+        inView(row, view) &&
         (fund === null || row.series_id === fund) &&
         (needle === "" || row.haystack.includes(needle)),
     ),
   );
 
-  const filtered = $derived(
-    (rule !== null && rule !== ALL) || severity !== ALL || fund !== null || needle !== "",
+  const narrowed = $derived((rule !== null && rule !== ALL) || fund !== null || needle !== "");
+
+  const filtered = $derived(narrowed || view !== DEFAULT_VIEW);
+
+  const eventSeries = (event: QualityEvent): { seriesId: string; name: string }[] =>
+    event.series_ids
+      .map((seriesId, index) => ({ seriesId, name: event.display_names[index] ?? seriesId }))
+      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+
+  interface EventRow extends QualityEvent {
+    key: string;
+    series: { seriesId: string; name: string }[];
+    haystack: string;
+  }
+
+  const eventRows = $derived<EventRow[]>(
+    data.quality.events.map((event) => {
+      const series = eventSeries(event);
+      return {
+        ...event,
+        key: `${event.rule}|${event.date}`,
+        series,
+        haystack: normalizeForSearch(
+          `${ruleLabel(event.rule)} ${event.note ?? ""} ${series
+            .map((entry) => `${entry.name} ${seriesTerms(entry.seriesId)}`)
+            .join(" ")}`,
+        ),
+      };
+    }),
+  );
+
+  const visibleEvents = $derived(
+    eventRows.filter(
+      (event) =>
+        (rule === null || rule === ALL || event.rule === rule) &&
+        inView(event, view) &&
+        (fund === null || event.series_ids.includes(fund)) &&
+        (needle === "" || event.haystack.includes(needle)),
+    ),
   );
 
   const clearFilters = (): void => {
     rule = ALL;
-    severity = ALL;
+    view = DEFAULT_VIEW;
     fund = null;
     query = "";
   };
 
+  const showInfo = (): void => {
+    view = "info";
+    document.getElementById("issues-title")?.scrollIntoView({ block: "start" });
+  };
+
   const alertCount = (count: number): string =>
     `${integer(count)} ${count === 1 ? "alerta" : "alertas"}`;
+
+  const seriesCount = (count: number): string =>
+    `${integer(count)} ${count === 1 ? "série" : "séries"}`;
+
+  const cnpjCount = (count: number): string =>
+    `${integer(count)} ${count === 1 ? "CNPJ" : "CNPJs"}`;
 
   const ruleColumns: Column<RuleRow>[] = [
     {
@@ -190,6 +287,13 @@
   ];
 
   const columns: Column<Row>[] = [
+    {
+      key: "status",
+      label: "Situação",
+      cell: statusCell,
+      sortBy: triageRank,
+      defaultSortDirection: "asc",
+    },
     {
       key: "severity",
       label: "Severidade",
@@ -248,6 +352,14 @@
   </div>
 {/snippet}
 
+{#snippet statusCell(row: Row)}
+  {#if untreatedInfo(row.status, row.severity)}
+    <span class="text-base-content/70" title="Informativo: não conta como aberto">{DASH}</span>
+  {:else}
+    <StatusBadge status={row.status} note={row.note} treatedOn={row.treated_on} />
+  {/if}
+{/snippet}
+
 {#snippet severityCell(row: Row)}
   <SeverityBadge severity={row.severity} />
 {/snippet}
@@ -285,19 +397,25 @@
 {#snippet issueCard(row: Row)}
   <div class="flex flex-col gap-1.5">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {#if !untreatedInfo(row.status, row.severity)}
+        <StatusBadge status={row.status} />
+      {/if}
       <SeverityBadge severity={row.severity} />
       <span class="text-sm font-medium">{ruleLabel(row.rule)}</span>
       <span class="text-base-content/70 text-xs tabular-nums">{issueSpan(row)}</span>
     </div>
     <div class="text-sm">{@render fundCell(row)}</div>
     <p class="text-sm">{row.text}</p>
+    {#if row.triage !== ""}
+      <p class="text-base-content/70 text-xs">{row.triage}</p>
+    {/if}
   </div>
 {/snippet}
 
 {#snippet noIssues()}
   <div class="flex flex-col items-center gap-2 py-8 text-center">
     <p class="text-base-content/70 text-sm">
-      {filtered ? "Nenhum alerta com esse filtro." : "Nenhum alerta nesta rodada."}
+      {narrowed ? "Nenhum alerta com esse filtro." : EMPTY_MESSAGES[view]}
     </p>
     {#if filtered}
       <button type="button" class="btn btn-ghost btn-sm" onclick={clearFilters}>
@@ -309,22 +427,32 @@
 
 <PageFrame
   title="Qualidade"
-  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo. As exceções são a linha zerada (descartada do cálculo), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (sem % do CDI e fora dos pares).`}
+  description={`Regras de qualidade aplicadas a ${integer(summary.checked_series)} séries e ${integer(summary.checked_days)} pares série × dia útil. Alertas marcam, não excluem: o dado segue no cálculo, exceto a linha zerada (descartada do cálculo), o informe duplicado (vale a linha CLASSES - FIF) e a série sem 12 meses (sem % do CDI e fora dos pares). Cada alerta tem uma situação: aberto é o que ainda precisa de leitura; explicado, erro da fonte e limitação do informe já foram lidos, e tratar um alerta não altera o dado. Informativos não contam como abertos.`}
   wide
 >
   <section class="flex flex-col gap-2" aria-labelledby="severity-tiles-title">
-    <h2 id="severity-tiles-title" class="sr-only">Alertas por severidade</h2>
+    <h2 id="severity-tiles-title" class="sr-only">Alertas abertos por severidade e tratados</h2>
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {#each SEVERITIES as level (level)}
-        {@const count = summary.by_severity[level] ?? 0}
+      {#each OPEN_SEVERITIES as level (level)}
+        {@const count = summary.open_by_severity[level] ?? 0}
         <StatTile
-          label={SEVERITY_LABELS[level]}
+          label={`Abertos · ${SEVERITY_LABELS[level]}`}
           value={integer(count)}
           hint={SEVERITY_HINTS[level]}
           tone={count === 0 ? "neutral" : SEVERITY_TONES[level]}
         />
       {/each}
+      <StatTile label="Tratados" value={integer(summary.treated)} hint={treatedHint} />
     </div>
+    <p class="text-base-content/70 text-xs">
+      <span class="tabular-nums">{integer(infoCount)}</span>
+      {infoCount === 1
+        ? "informativo à parte, explicado pelo mercado ou pelo cadastro: não conta como aberto."
+        : "informativos à parte, explicados pelo mercado ou pelo cadastro: não contam como abertos."}
+      {#if infoCount > 0}
+        <button type="button" class="link" onclick={showInfo}>Ver informativos</button>.
+      {/if}
+    </p>
   </section>
 
   <section class="flex flex-col gap-2" aria-labelledby="rules-title">
@@ -364,10 +492,10 @@
           />
         </div>
         <SegmentedControl
-          bind:value={severity}
-          options={SEVERITY_OPTIONS}
-          label="Severidade dos alertas exibidos"
-          caption="Severidade:"
+          bind:value={view}
+          options={VIEW_OPTIONS}
+          label="Situação dos alertas exibidos"
+          caption="Situação:"
           size="sm"
         />
         <div class="flex items-center gap-2">
@@ -399,13 +527,93 @@
         </div>
       </div>
     </section>
+    {#if visibleEvents.length > 0}
+      <section class="flex flex-col gap-2" aria-labelledby="events-title">
+        <div class="flex flex-col gap-0.5">
+          <h3 id="events-title" class="text-sm font-semibold">
+            Eventos
+            <span class="text-base-content/70 font-normal tabular-nums">
+              · {integer(visibleEvents.length)}
+            </span>
+          </h3>
+          <p class="text-base-content/70 text-xs">
+            Dias com salto de cota em 3 ou mais séries, lidos como um evento só. A situação é a de
+            todos os alertas do dia; se eles divergem, o evento fica aberto. Seguem os filtros acima.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {#each visibleEvents as event (event.key)}
+            <article
+              class="card bg-base-100 border-base-content/10 border"
+              aria-labelledby={`event-${event.date}`}
+            >
+              <div class="card-body gap-3 p-4 sm:p-5">
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {#if event.severity === "info"}
+                      <span class="badge badge-sm badge-outline shrink-0">Dia de mercado</span>
+                      {#if event.status !== "open"}
+                        <StatusBadge status={event.status} />
+                      {/if}
+                    {:else}
+                      <StatusBadge status={event.status} />
+                      <SeverityBadge severity={event.severity} />
+                    {/if}
+                  </div>
+                  <h4 id={`event-${event.date}`} class="text-sm font-semibold">
+                    {ruleLabel(event.rule)} em <span class="tabular-nums">{date(event.date)}</span>
+                  </h4>
+                </div>
+                <p class="grow-0 text-sm">
+                  <span class="text-2xl font-medium tracking-[-0.01em] tabular-nums"
+                    >{integer(event.series.length)}</span
+                  >
+                  {event.series.length === 1 ? "série" : "séries"} de {cnpjCount(event.cnpj_count)}
+                </p>
+                {#if event.note !== null}
+                  <p class="grow-0 text-sm">{event.note}</p>
+                {:else if event.severity === "info"}
+                  <p class="text-base-content/70 grow-0 text-xs">
+                    Movimento compartilhado pelo mercado: os alertas do dia são informativos.
+                  </p>
+                {/if}
+                <details class="grow-0 text-sm" open={event.series.length <= EVENT_LIST_OPEN_LIMIT}>
+                  <summary class="text-base-content/70 cursor-pointer text-xs">
+                    {seriesCount(event.series.length)} no evento
+                  </summary>
+                  <ul
+                    class="mt-1.5 flex flex-col gap-1"
+                    aria-label={`Séries do evento de ${date(event.date)}`}
+                  >
+                    {#each event.series as entry (entry.seriesId)}
+                      <li class="min-w-0">
+                        {#if linkable.has(entry.seriesId)}
+                          <a
+                            class="link link-hover"
+                            href={resolve("/fundo/[id]", { id: entry.seriesId })}
+                            title={entry.seriesId}>{entry.name}</a
+                          >
+                        {:else}
+                          <span title={entry.seriesId}>{entry.name}</span>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ul>
+                </details>
+              </div>
+            </article>
+          {/each}
+        </div>
+      </section>
+      <h3 class="text-sm font-semibold">Alertas um a um</h3>
+    {/if}
     <div class="card bg-base-100 border-base-content/10 border">
       <div class="card-body p-2 sm:p-3">
         <DataTable
           rows={visible}
           {columns}
           rowKey={(row) => row.index}
-          sort={{ key: "severity", direction: "asc" }}
+          sort={{ key: "status", direction: "asc" }}
           label="Alertas de qualidade"
           class="table-sm"
           card={issueCard}

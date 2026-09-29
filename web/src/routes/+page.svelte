@@ -9,7 +9,7 @@
   import PageFrame from "$lib/components/PageFrame.svelte";
   import QualityStrip from "$lib/components/QualityStrip.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
-  import type { FundSummary } from "$lib/data/types";
+  import type { FundSummary, IssueCounts } from "$lib/data/types";
   import { isPartialMonth, MIN_PEERS } from "$lib/fund";
   import {
     DASH,
@@ -27,8 +27,10 @@
     AUDIENCES,
     CLASSIFICATIONS,
     GENERAL_PUBLIC,
+    OPEN_SEVERITIES,
     SEVERITIES,
     severityCountWord,
+    type Severity,
   } from "$lib/labels";
   import { TABLE_LABELS } from "$lib/table";
   import type { Snapshot } from "./$types";
@@ -161,14 +163,18 @@
   );
 
   const alertRank = (fund: FundSummary): number | null =>
-    fund.issues.high + fund.issues.medium === 0
+    fund.open_issues.high + fund.open_issues.medium === 0
       ? null
-      : fund.issues.high * 1000 + fund.issues.medium;
+      : fund.open_issues.high * 1000 + fund.open_issues.medium;
 
-  const alertTitle = (fund: FundSummary): string =>
-    SEVERITIES.map(
-      (level) => `${integer(fund.issues[level])} ${severityCountWord(level, fund.issues[level])}`,
-    ).join(", ");
+  const countOf = (counts: IssueCounts, levels: readonly Severity[]): number =>
+    levels.reduce((sum, level) => sum + counts[level], 0);
+
+  const alertTitle = (fund: FundSummary): string => {
+    const open = countOf(fund.open_issues, OPEN_SEVERITIES);
+    const total = countOf(fund.issues, SEVERITIES);
+    return `${integer(open)} ${open === 1 ? "aberto" : "abertos"} de ${integer(total)} no total`;
+  };
 
   const columns: Column<FundSummary>[] = [
     {
@@ -312,20 +318,20 @@
 {/snippet}
 
 {#snippet alertsCell(fund: FundSummary)}
-  {#if fund.issues.high + fund.issues.medium === 0}
-    <span class="text-base-content/70">{DASH}</span>
+  {#if fund.open_issues.high + fund.open_issues.medium === 0}
+    <span class="text-base-content/70" title={alertTitle(fund)}>{DASH}</span>
   {:else}
     <span class="inline-flex flex-wrap justify-end gap-1" title={alertTitle(fund)}>
-      {#if fund.issues.high > 0}
+      {#if fund.open_issues.high > 0}
         <span class="badge badge-error badge-sm tabular-nums">
-          {integer(fund.issues.high)}
-          {severityCountWord("high", fund.issues.high)}
+          {integer(fund.open_issues.high)}
+          {severityCountWord("high", fund.open_issues.high)}
         </span>
       {/if}
-      {#if fund.issues.medium > 0}
+      {#if fund.open_issues.medium > 0}
         <span class="badge badge-warning badge-sm tabular-nums">
-          {integer(fund.issues.medium)}
-          {severityCountWord("medium", fund.issues.medium)}
+          {integer(fund.open_issues.medium)}
+          {severityCountWord("medium", fund.open_issues.medium)}
         </span>
       {/if}
     </span>

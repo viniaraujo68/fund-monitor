@@ -80,3 +80,29 @@ export const severityBadgeClass = (key: string): string =>
 
 export const severityCountWord = (key: Severity, count: number): string =>
   SEVERITY_COUNT_WORDS[key][count === 1 ? 0 : 1];
+
+export const STATUSES = ["open", "explained", "source_error", "limitation"] as const;
+
+export type Status = (typeof STATUSES)[number];
+
+export const TREATED_STATUSES = ["explained", "source_error", "limitation"] as const;
+
+export const STATUS_LABELS: Record<Status, string> = {
+  open: "Aberto",
+  explained: "Explicado",
+  source_error: "Erro da fonte",
+  limitation: "Limitação do informe",
+};
+
+export const OPEN_SEVERITIES = ["high", "medium", "low"] as const;
+
+export const isStatus = (value: string): value is Status =>
+  (STATUSES as readonly string[]).includes(value);
+
+export const statusLabel = (key: string): string => (isStatus(key) ? STATUS_LABELS[key] : key);
+
+export const countsAsOpen = (status: string, severity: string): boolean =>
+  status === "open" && severity !== "info";
+
+export const untreatedInfo = (status: string, severity: string): boolean =>
+  status === "open" && severity === "info";
