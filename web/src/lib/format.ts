@@ -57,7 +57,16 @@ const compactMoneyFormat = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
 });
 
+const pointsFormat = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+});
+
 const orDash = (value: string | null): string => value ?? DASH;
+
+export const percentPoints = (value: Maybe): string =>
+  value === null || value === undefined ? DASH : `${pointsFormat.format(value * 100)} p.p.`;
 
 export const percent2 = (value: Maybe): string => orDash(base.percent(value));
 
@@ -103,3 +112,8 @@ export const peerRank = (percentile: Maybe, peerCount: number): string =>
   percentile === null || percentile === undefined || peerCount === 0
     ? DASH
     : `${percentileLabel(percentile)} · ${integer(peerCount)} ${peerCount === 1 ? "par" : "pares"}`;
+
+export const peerPair = (returnPercentile: Maybe, volatilityPercentile: Maybe, peerCount: number): string =>
+  returnPercentile === null || returnPercentile === undefined || peerCount === 0
+    ? DASH
+    : `${percentileLabel(returnPercentile)} ret · ${percentileLabel(volatilityPercentile)} vol · ${integer(peerCount)}`;

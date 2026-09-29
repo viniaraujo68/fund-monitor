@@ -20,11 +20,13 @@
     monthLabel,
     peerRank,
     percent2,
+    percentPoints,
     ratio2,
   } from "$lib/format";
   import {
     ALL,
     AUDIENCES,
+    benchmarkLabel,
     CLASSIFICATIONS,
     GENERAL_PUBLIC,
     OPEN_SEVERITIES,
@@ -222,6 +224,14 @@
       sortBy: (fund) => fund.pct_cdi_12m,
     },
     {
+      key: "excess_primary_12m",
+      label: "vs benchmark 12m",
+      numeric: true,
+      class: "whitespace-nowrap",
+      cell: excessCell,
+      sortBy: (fund) => fund.excess_primary_12m,
+    },
+    {
       key: "volatility_12m",
       label: "Vol. 12m",
       numeric: true,
@@ -301,6 +311,17 @@
       <span class="badge badge-outline badge-xs">estrutural</span>
     {/if}
   </span>
+{/snippet}
+
+{#snippet excessCell(fund: FundSummary)}
+  {#if fund.excess_primary_12m === null}
+    <span class="text-base-content/70">{DASH}</span>
+  {:else}
+    <span title={`Retorno 12m menos o ${benchmarkLabel(fund.primary_benchmark)} no mesmo período`}>
+      {percentPoints(fund.excess_primary_12m)}
+      <span class="text-base-content/70 block text-xs">{benchmarkLabel(fund.primary_benchmark)}</span>
+    </span>
+  {/if}
 {/snippet}
 
 {#snippet sharpeCell(fund: FundSummary)}
