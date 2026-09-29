@@ -44,6 +44,132 @@
       "status": "source_error",
       "note": "CVM publicou o mesmo dia como FI e como CLASSES - FIF com valores diferentes; vale a linha CLASSES - FIF.",
       "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "55298739000113",
+      "date_from": "2025-03-13",
+      "date_to": "2025-04-09",
+      "status": "explained",
+      "note": "Fundo com ativos no exterior, que se move com o S&P 500 (ρ 0,65 e β 0,56 nos retornos diários da janela). Nos oito saltos de 13/03 a 09/04/2025 o S&P 500 mexeu no mesmo sentido e no mesmo dia, de −5,97 % (04/04) a +9,52 % (09/04), pelo FRED (SP500).",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "55298739000113",
+      "date_from": "2025-10-10",
+      "date_to": "2025-10-10",
+      "status": "explained",
+      "note": "Queda de 1,46 % no dia em que o S&P 500 caiu 2,71 % (FRED SP500); o fundo se move com o índice (β 0,56).",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "44212682000171",
+      "date_from": "2025-04-03",
+      "date_to": "2025-04-09",
+      "status": "explained",
+      "note": "FOF de ações globais (ρ 0,89 com o S&P 500 em reais). Em 03/04/2025 caiu 5,63 % com o S&P 500 a −4,84 %; em 09/04/2025 subiu 7,62 % com o S&P 500 a +9,52 % (FRED SP500).",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "54023112000197",
+      "date_from": "2024-12-06",
+      "date_to": "2024-12-06",
+      "status": "limitation",
+      "note": "Resgate de R$ 502 mil (1,0 % do PL) no mesmo dia, que se repete todo mês na primeira quinzena com a cota caindo cerca de 1 %. Provável pagamento de rendimentos que sai da cota e aparece como resgate; a confirmar com a lâmina.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "54023112000197",
+      "date_from": "2025-10-07",
+      "date_to": "2025-10-07",
+      "status": "limitation",
+      "note": "Resgate de R$ 510 mil (1,0 % do PL) e cota −1,04 % no mesmo dia, o padrão mensal do fundo. Provável pagamento de rendimentos; a confirmar com a lâmina.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "54023112000197",
+      "date_from": "2026-09-14",
+      "date_to": "2026-09-14",
+      "status": "limitation",
+      "note": "Resgate de R$ 508 mil (1,0 % do PL) e cota −1,07 % no mesmo dia, o padrão mensal do fundo. Provável pagamento de rendimentos; a confirmar com a lâmina.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "quota_jump",
+      "series_id": "53248945000193",
+      "date_from": "2026-08-31",
+      "date_to": "2026-08-31",
+      "status": "limitation",
+      "note": "A cota cai cerca de 1 % no último dia útil de todo mês desde set/2024 (−1,06 % em 31/08/2026), sem resgate informado. Provável distribuição de rendimentos; a confirmar com a lâmina.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "19719727000151",
+      "date_from": "2024-11-01",
+      "date_to": "2024-12-31",
+      "status": "limitation",
+      "note": "Resgate de R$ 19,1 mi informado em 29/11/2024 sem queda do PL; o PL cai R$ 19,2 mi em 06/12/2024 sem resgate informado. Os resíduos de novembro e dezembro se anulam: o informe registra o resgate e a baixa do PL em datas diferentes.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "06224719000192",
+      "date_from": "2025-01-01",
+      "date_to": "2025-01-31",
+      "status": "limitation",
+      "note": "Resgates de R$ 13,0 mi (36 % do PL inicial) no meio do mês; dia a dia, PL, fluxo e cota fecham com resíduo zero. É a decomposição mensal, que supõe o fluxo no fim do mês.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "62571624000116",
+      "date_from": "2025-12-01",
+      "date_to": "2025-12-31",
+      "status": "limitation",
+      "note": "Fundo novo (desde 13/11/2025): aplicações de R$ 6,2 mi sobre PL inicial de R$ 1,2 mi. Dia a dia o resíduo é zero; a decomposição mensal supõe o fluxo no fim do mês.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "44212682000171",
+      "date_from": "2026-01-01",
+      "date_to": "2026-01-31",
+      "status": "limitation",
+      "note": "Aplicações de R$ 29,7 mi (121 % do PL inicial) nos primeiros sete dias úteis de um mês de cota −2,24 %. Dia a dia o resíduo é zero; a decomposição mensal supõe o fluxo no fim do mês.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "63826355000154",
+      "date_from": "2026-01-01",
+      "date_to": "2026-01-31",
+      "status": "limitation",
+      "note": "Fundo novo (desde 16/12/2025): aplicação de R$ 66,0 mi em 06/01/2026 sobre PL de R$ 5,3 mi. Dia a dia o resíduo é zero; a decomposição mensal supõe o fluxo no fim do mês.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "64025077000107",
+      "date_from": "2026-01-01",
+      "date_to": "2026-01-31",
+      "status": "limitation",
+      "note": "Fundo novo (desde 19/12/2025): aplicações de R$ 91,4 mi sobre PL inicial de R$ 11,3 mi. Dia a dia o resíduo é zero; a decomposição mensal supõe o fluxo no fim do mês.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "54198519000155-TY3I61766775472",
+      "date_from": "2026-02-01",
+      "date_to": "2026-02-28",
+      "status": "limitation",
+      "note": "Aplicação de R$ 39,9 mi sobre PL de R$ 1,8 mi no mês (R$ 34,4 mi em 04/02/2026). Dia a dia o resíduo é zero; é a limitação da decomposição mensal descrita em DECISIONS.md §7.",
+      "treated_on": "2026-09-29"
     }
   ]
 }
