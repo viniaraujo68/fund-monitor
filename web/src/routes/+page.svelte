@@ -18,7 +18,7 @@
     money,
     moneyCompact,
     monthLabel,
-    peerRank,
+    peerPair,
     percent2,
     percentPoints,
     ratio2,
@@ -178,6 +178,9 @@
     return `${integer(open)} ${open === 1 ? "aberto" : "abertos"} de ${integer(total)} no total`;
   };
 
+  const peersTitle = (fund: FundSummary): string =>
+    `Percentil em 12 meses entre ${integer(fund.peer_count)} pares de Público Geral da mesma classificação ANBIMA. Retorno alto: rendeu mais que os pares. Vol alta: oscilou mais que os pares.`;
+
   const columns: Column<FundSummary>[] = [
     {
       key: "display_name",
@@ -284,7 +287,7 @@
       label: "Pares",
       numeric: true,
       class: "whitespace-nowrap",
-      value: (fund) => peerRank(fund.peer_return_percentile_12m, fund.peer_count),
+      cell: peersCell,
       sortBy: (fund) => fund.peer_return_percentile_12m,
     },
     {
@@ -322,6 +325,12 @@
       <span class="text-base-content/70 block text-xs">{benchmarkLabel(fund.primary_benchmark)}</span>
     </span>
   {/if}
+{/snippet}
+
+{#snippet peersCell(fund: FundSummary)}
+  <span title={fund.peer_return_percentile_12m === null ? undefined : peersTitle(fund)}>
+    {peerPair(fund.peer_return_percentile_12m, fund.peer_volatility_percentile_12m, fund.peer_count)}
+  </span>
 {/snippet}
 
 {#snippet sharpeCell(fund: FundSummary)}
@@ -524,9 +533,10 @@
     <div class="flex flex-col gap-0.5">
       <h2 id="funds-table-title" class="text-base font-semibold">Fundos</h2>
       <p class="text-base-content/70 text-xs">
-        Janela de 12 meses até {date(data.meta.as_of)}. Pares: percentil do retorno 12m entre fundos
-        de Público Geral da mesma classificação ANBIMA, com pelo menos {MIN_PEERS} pares; os outros públicos
-        não têm pares. * captação com janela parcial.
+        Janela de 12 meses até {date(data.meta.as_of)}. vs benchmark: retorno menos o benchmark principal
+        da série (CDI para DI e multimercado, IMA-B para renda fixa, Ibovespa ou IBrX-100 para ações). Pares:
+        percentil do retorno e da volatilidade 12m e número de pares de Público Geral da mesma classificação
+        ANBIMA, com pelo menos {MIN_PEERS} pares; os outros públicos não têm pares. * captação com janela parcial.
       </p>
     </div>
     <div class="card bg-base-100 border-base-content/10 border">
