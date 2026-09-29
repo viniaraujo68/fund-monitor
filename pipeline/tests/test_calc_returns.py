@@ -47,10 +47,10 @@ def test_since_start_return_matches_hand_calculation() -> None:
     assert row["excess_cdi"] == pytest.approx(fund_return - (1.0005**4 - 1))
 
 
-def test_short_windows_are_not_annualized_nor_compared_as_pct_cdi() -> None:
+def test_short_windows_are_not_annualized_but_have_pct_cdi() -> None:
     row = small_windows().filter(pl.col("window") == "since_start").row(0, named=True)
     assert row["fund_annualized"] is None
-    assert row["pct_cdi"] is None
+    assert row["pct_cdi"] == pytest.approx((1.02 * 0.98 * 1.03 * 0.99 - 1) / (1.0005**4 - 1))
 
 
 def test_window_without_full_history_is_empty() -> None:
@@ -157,7 +157,7 @@ def test_since_start_below_252_business_days_is_not_annualized() -> None:
     row = windows.filter(pl.col("window") == "since_start").row(0, named=True)
     assert row["business_days"] == 251
     assert row["fund_annualized"] is None
-    assert row["pct_cdi"] is None
+    assert row["pct_cdi"] == pytest.approx((1.0006**251 - 1) / (1.0005**251 - 1))
 
 
 def stopped_series(cnpj: str) -> tuple[list[date], pl.DataFrame]:

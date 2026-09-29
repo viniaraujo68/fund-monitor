@@ -99,7 +99,7 @@ def window_returns(quotas: pl.DataFrame, levels: pl.DataFrame, as_of: date) -> p
         .with_columns(
             pl.when("annualizable").then(annualize(pl.col("fund_return"))).alias("fund_annualized"),
             pl.when("annualizable").then(annualize(pl.col("cdi_return"))).alias("cdi_annualized"),
-            pl.when(pl.col("annualizable") & (pl.col("cdi_return") > 0))
+            pl.when(pl.col("stale").not_() & (pl.col("cdi_return") > 0))
             .then(pl.col("fund_return") / pl.col("cdi_return"))
             .alias("pct_cdi"),
             *((pl.col("fund_return") - pl.col(f"{b}_return")).alias(f"excess_{b}") for b in BENCHMARKS),
