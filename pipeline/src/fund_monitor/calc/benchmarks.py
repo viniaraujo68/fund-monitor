@@ -2,9 +2,12 @@ from datetime import timedelta
 
 import polars as pl
 
+from fund_monitor import config
+
 CDI = "cdi"
 IMA_B = "ima_b"
 IBOVESPA = "ibov"
+IBRX = "ibrx"
 LEVEL_TOLERANCE = "7d"
 
 BENCHMARKS_BY_CLASSIFICATION = {
@@ -38,13 +41,23 @@ def index_levels(frame: pl.DataFrame, benchmark: str) -> pl.DataFrame:
     )
 
 
-def benchmark_levels(indices: pl.DataFrame, ima: pl.DataFrame, ibovespa: pl.DataFrame) -> pl.DataFrame:
+def benchmark_levels(indices: pl.DataFrame, ima: pl.DataFrame, ibovespa: pl.DataFrame, ibrx: pl.DataFrame) -> pl.DataFrame:
     return pl.concat(
         [
             cdi_levels(indices),
             index_levels(ima.filter(pl.col("index") == "IMA-B"), IMA_B),
             index_levels(ibovespa, IBOVESPA),
+            index_levels(ibrx, IBRX),
         ]
+    )
+
+
+def read_benchmark_levels() -> pl.DataFrame:
+    return benchmark_levels(
+        pl.read_parquet(config.INDICES_PARQUET),
+        pl.read_parquet(config.IMA_PARQUET),
+        pl.read_parquet(config.IBOVESPA_PARQUET),
+        pl.read_parquet(config.IBRX_PARQUET),
     )
 
 

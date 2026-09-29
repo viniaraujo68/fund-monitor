@@ -43,7 +43,7 @@ def levels_frame(days: list[date], cdi_percent: float, ima_b: list[float] | None
         schema={"index": pl.String, "date": pl.Date, "value": pl.Float64},
     )
     ibovespa = pl.DataFrame(schema={"index": pl.String, "date": pl.Date, "value": pl.Float64})
-    return benchmark_levels(indices, ima, ibovespa)
+    return benchmark_levels(indices, ima, ibovespa, ibovespa)
 
 
 def compound(start: float, returns: list[float]) -> list[float]:

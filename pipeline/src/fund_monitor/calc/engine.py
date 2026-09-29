@@ -4,7 +4,7 @@ from datetime import date
 import polars as pl
 
 from fund_monitor import config
-from fund_monitor.calc.benchmarks import benchmark_levels
+from fund_monitor.calc.benchmarks import read_benchmark_levels
 from fund_monitor.calc.flows import aggregate_monthly, aggregate_totals, flow_summary, monthly_flows
 from fund_monitor.calc.peers import GROUP_KEY, PEER_WINDOW, peer_positions, peer_table
 from fund_monitor.calc.returns import cumulative_index, rolling_12m_returns, subtract_months, window_returns
@@ -54,9 +54,7 @@ def peer_subjects(monitored: pl.DataFrame, windows: pl.DataFrame, risk: pl.DataF
 
 def calculate(registry: pl.DataFrame) -> dict[str, pl.DataFrame]:
     daily = deduplicate_reports(load_daily(config.DAILY_PARQUET_DIR))
-    levels = benchmark_levels(
-        pl.read_parquet(config.INDICES_PARQUET), pl.read_parquet(config.IMA_PARQUET), pl.read_parquet(config.IBOVESPA_PARQUET)
-    )
+    levels = read_benchmark_levels()
     monitored = select_monitored_series(registry, config.MANAGER_CNPJ)
     as_of = complete_as_of(quota_series(daily, monitored))
     daily = valid_reports(daily.filter(pl.col("date") <= as_of))
