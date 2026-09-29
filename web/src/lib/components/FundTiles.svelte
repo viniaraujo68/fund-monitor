@@ -1,7 +1,15 @@
 <script lang="ts">
   import type { FundDetail, RiskRow } from "$lib/data/types";
-  import { findRisk, findWindow, hasHistory, hasPeerGroup, peerGapReason } from "$lib/fund";
-  import { date, integer, money, moneyCompact, peerRank, percent2, ratio2 } from "$lib/format";
+  import {
+    findRisk,
+    findWindow,
+    hasHistory,
+    hasPeerGroup,
+    hidesSharpe,
+    peerGapReason,
+    SHARPE_HIDDEN_REASON,
+  } from "$lib/fund";
+  import { DASH, date, integer, money, moneyCompact, peerRank, percent2, ratio2 } from "$lib/format";
   import { benchmarkLabel } from "$lib/labels";
   import StatTile from "./StatTile.svelte";
 
@@ -66,12 +74,16 @@
       value={percent2(summary.volatility_12m)}
       hint={missing(summary.volatility_12m, "menos de 60 observações") ?? "anualizada"}
     />
-    <StatTile
-      label="Sharpe 12m"
-      value={ratio2(summary.sharpe_12m)}
-      hint={missing(summary.sharpe_12m, "menos de 60 observações") ??
-        "CDI como taxa livre de risco"}
-    />
+    {#if hidesSharpe(summary)}
+      <StatTile label="Sharpe 12m" value={DASH} hint={SHARPE_HIDDEN_REASON} />
+    {:else}
+      <StatTile
+        label="Sharpe 12m"
+        value={ratio2(summary.sharpe_12m)}
+        hint={missing(summary.sharpe_12m, "menos de 60 observações") ??
+          "CDI como taxa livre de risco"}
+      />
+    {/if}
     <StatTile
       label="Drawdown máximo 12m"
       value={percent2(summary.max_drawdown_12m)}

@@ -10,7 +10,7 @@
   import QualityStrip from "$lib/components/QualityStrip.svelte";
   import StatTile from "$lib/components/StatTile.svelte";
   import type { FundSummary, IssueCounts } from "$lib/data/types";
-  import { isPartialMonth, MIN_PEERS } from "$lib/fund";
+  import { hidesSharpe, isPartialMonth, MIN_PEERS, SHARPE_HIDDEN_REASON } from "$lib/fund";
   import {
     DASH,
     date,
@@ -242,8 +242,8 @@
       label: "Sharpe 12m",
       numeric: true,
       class: "whitespace-nowrap",
-      value: (fund) => ratio2(fund.sharpe_12m),
-      sortBy: (fund) => fund.sharpe_12m,
+      cell: sharpeCell,
+      sortBy: (fund) => (hidesSharpe(fund) ? null : fund.sharpe_12m),
     },
     {
       key: "net_assets",
@@ -301,6 +301,14 @@
       <span class="badge badge-outline badge-xs">estrutural</span>
     {/if}
   </span>
+{/snippet}
+
+{#snippet sharpeCell(fund: FundSummary)}
+  {#if hidesSharpe(fund)}
+    <span class="text-base-content/70" title={SHARPE_HIDDEN_REASON}>{DASH}</span>
+  {:else}
+    {ratio2(fund.sharpe_12m)}
+  {/if}
 {/snippet}
 
 {#snippet netAssetsCell(fund: FundSummary)}

@@ -5,6 +5,13 @@ export const CDI = "cdi";
 
 export const MIN_PEERS = 5;
 
+export const DI_BENCHMARK = "DI de um dia";
+
+export const SHARPE_HIDDEN_REASON = "Sharpe não exibido em fundo DI: vol perto de zero torna a razão instável";
+
+export const hidesSharpe = (summary: FundSummary): boolean =>
+  summary.performance_benchmark === DI_BENCHMARK;
+
 export const findWindow = (detail: FundDetail, key: string): WindowRow | undefined =>
   detail.windows.find((row) => row.window === key);
 
