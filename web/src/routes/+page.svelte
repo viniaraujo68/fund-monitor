@@ -411,6 +411,20 @@
         <dt class="text-base-content/70 text-xs">PL</dt>
         <dd class="tabular-nums">{moneyCompact(fund.net_assets)}</dd>
       </div>
+      <div class="flex flex-col">
+        <dt class="text-base-content/70 text-xs">vs {benchmarkLabel(fund.primary_benchmark)}</dt>
+        <dd class="tabular-nums">{percentPoints(fund.excess_primary_12m)}</dd>
+      </div>
+      <div class="flex flex-col">
+        <dt class="text-base-content/70 text-xs">Pares</dt>
+        <dd class="tabular-nums">
+          {peerPair(fund.peer_return_percentile_12m, fund.peer_volatility_percentile_12m, fund.peer_count)}
+        </dd>
+      </div>
+      <div class="flex flex-col">
+        <dt class="text-base-content/70 text-xs">Alertas</dt>
+        <dd>{@render alertsCell(fund)}</dd>
+      </div>
     </dl>
   </div>
 {/snippet}
