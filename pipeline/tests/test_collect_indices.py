@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 from fund_monitor import config
-from fund_monitor.collect import anbima_ima, b3_ibovespa, bcb_sgs
+from fund_monitor.collect import anbima_ima, b3_indices, bcb_sgs
 
 FIXTURES = Path(__file__).parent / "fixtures"
 UNEXPECTED_REPLY = b"<html><body>Servico temporariamente indisponivel</body></html>"
@@ -84,12 +84,12 @@ def test_anbima_retries_only_recent_empty_days(tmp_path: Path, monkeypatch: pyte
 
 
 def test_b3_payload_is_base64_json() -> None:
-    assert b3_ibovespa.request_payload(2026) == "eyJpbmRleCI6IklCT1YiLCJsYW5ndWFnZSI6InB0LWJyIiwieWVhciI6IjIwMjYifQ=="
+    assert b3_indices.request_payload(2026) == "eyJpbmRleCI6IklCT1YiLCJsYW5ndWFnZSI6InB0LWJyIiwieWVhciI6IjIwMjYifQ=="
 
 
 def test_b3_parse_reads_day_by_month_matrix() -> None:
     document = json.loads((FIXTURES / "b3_ibov_2026_sample.json").read_text())
-    frame = b3_ibovespa.parse_year(document, 2026)
+    frame = b3_indices.parse_year(document, 2026)
     closes = dict(frame.select("date", "value").iter_rows())
     assert closes[date(2026, 1, 2)] == Decimal("160538.69")
     assert closes[date(2026, 8, 31)] == Decimal("177418.78")
@@ -151,7 +151,7 @@ def test_b3_drops_the_reference_date(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(config, "IBOVESPA_PARQUET", tmp_path / "ibovespa.parquet")
     sample = (FIXTURES / "b3_ibov_2026_sample.json").read_bytes()
     mock_http(monkeypatch, lambda request: httpx.Response(200, content=sample))
-    closes = set(b3_ibovespa.collect_ibovespa(date(2026, 1, 1), date(2026, 8, 31))["date"])
+    closes = set(b3_indices.collect_index(date(2026, 1, 1), date(2026, 8, 31))["date"])
     assert date(2026, 8, 31) not in closes
     assert date(2026, 7, 31) in closes
 
@@ -164,23 +164,23 @@ def test_b3_past_year_reply_is_checked_before_it_is_saved(
 ) -> None:
     monkeypatch.setattr(config, "B3_RAW_DIR", tmp_path)
     with mock_client(lambda request: httpx.Response(200, content=reply)) as client:
-        with pytest.raises(ValueError, match="b3 2026"):
-            b3_ibovespa.fetch_year(client, 2026, date(2027, 1, 4))
-    assert not b3_ibovespa.raw_path(2026).exists()
+        with pytest.raises(ValueError, match="b3 IBOV 2026"):
+            b3_indices.fetch_year(client, 2026, date(2027, 1, 4))
+    assert not b3_indices.raw_path(2026).exists()
 
 
 def test_b3_current_year_may_have_no_close_yet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "B3_RAW_DIR", tmp_path)
     with mock_client(lambda request: httpx.Response(200, content=b'{"results": []}')) as client:
-        b3_ibovespa.fetch_year(client, 2027, date(2027, 1, 4))
-    assert b3_ibovespa.raw_path(2027).exists()
+        b3_indices.fetch_year(client, 2027, date(2027, 1, 4))
+    assert b3_indices.raw_path(2027).exists()
 
 
 def test_b3_fetches_each_year_it_needs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "B3_RAW_DIR", tmp_path / "b3")
     monkeypatch.setattr(config, "IBOVESPA_PARQUET", tmp_path / "ibovespa.parquet")
     final_2025 = b3_document({date(2025, 12, 29): "160.000,00", date(2025, 12, 30): "161.000,00"})
-    write_with_mtime(b3_ibovespa.raw_path(2025), final_2025, datetime(2026, 1, 2, 20))
+    write_with_mtime(b3_indices.raw_path(2025), final_2025, datetime(2026, 1, 2, 20))
     requested = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -188,14 +188,32 @@ def test_b3_fetches_each_year_it_needs(tmp_path: Path, monkeypatch: pytest.Monke
         return httpx.Response(200, content=b3_document({date(2026, 1, 2): "162.000,00"}))
 
     mock_http(monkeypatch, handler)
-    ibovespa = b3_ibovespa.collect_ibovespa(date(2025, 12, 1), date(2026, 1, 5))
+    ibovespa = b3_indices.collect_index(date(2025, 12, 1), date(2026, 1, 5))
     assert requested == [2026]
     assert ibovespa["date"].to_list() == [date(2025, 12, 29), date(2025, 12, 30), date(2026, 1, 2)]
 
 
+def test_b3_collects_each_index_into_its_own_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "B3_RAW_DIR", tmp_path / "b3")
+    monkeypatch.setattr(config, "IBOVESPA_PARQUET", tmp_path / "ibovespa.parquet")
+    monkeypatch.setattr(config, "IBRX_PARQUET", tmp_path / "ibrx100.parquet")
+    closes = {"IBOV": "162.000,00", "IBXX": "68.000,00"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        index = json.loads(base64.b64decode(request.url.path.rsplit("/", 1)[-1]))["index"]
+        return httpx.Response(200, content=b3_document({date(2026, 1, 2): closes[index]}))
+
+    mock_http(monkeypatch, handler)
+    b3_indices.collect_b3_indices(date(2026, 1, 1), date(2026, 1, 5))
+    ibrx = pl.read_parquet(tmp_path / "ibrx100.parquet")
+    assert ibrx.select("index", "value").rows() == [("IBXX", 68000.0)]
+    assert pl.read_parquet(tmp_path / "ibovespa.parquet")["value"].to_list() == [162000.0]
+    assert b3_indices.raw_path(2026, "IBXX").name == "ibxx_2026.json"
+
+
 def test_b3_last_expected_session_skips_the_weekend() -> None:
-    assert b3_ibovespa.last_expected_session(2025) == date(2025, 12, 30)
-    assert b3_ibovespa.last_expected_session(2023) == date(2023, 12, 29)
+    assert b3_indices.last_expected_session(2025) == date(2025, 12, 30)
+    assert b3_indices.last_expected_session(2023) == date(2023, 12, 29)
 
 
 def test_b3_refetch_rule_follows_the_file_not_the_run_date(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -203,20 +221,20 @@ def test_b3_refetch_rule_follows_the_file_not_the_run_date(tmp_path: Path, monke
     reference = date(2026, 3, 2)
     complete = b3_document({date(2025, 12, 22): "158.000,00", date(2025, 12, 30): "161.000,00"})
     partial = b3_document({date(2025, 12, 22): "158.000,00"})
-    path = b3_ibovespa.raw_path(2025)
-    assert b3_ibovespa.needs_fetch(2025, reference)
+    path = b3_indices.raw_path(2025)
+    assert b3_indices.needs_fetch(2025, reference)
     write_with_mtime(path, partial, datetime(2025, 12, 23, 20))
-    assert b3_ibovespa.needs_fetch(2025, reference)
+    assert b3_indices.needs_fetch(2025, reference)
     write_with_mtime(path, complete, datetime(2025, 12, 30, 20))
-    assert b3_ibovespa.needs_fetch(2025, reference)
+    assert b3_indices.needs_fetch(2025, reference)
     write_with_mtime(path, partial, datetime(2026, 1, 5, 20))
-    assert b3_ibovespa.needs_fetch(2025, reference)
+    assert b3_indices.needs_fetch(2025, reference)
     write_with_mtime(path, complete, datetime(2026, 1, 5, 20))
-    assert not b3_ibovespa.needs_fetch(2025, reference)
+    assert not b3_indices.needs_fetch(2025, reference)
     write_with_mtime(path, partial, datetime(2026, 1, 12, 20))
-    assert not b3_ibovespa.needs_fetch(2025, reference)
-    write_with_mtime(b3_ibovespa.raw_path(2026), partial, datetime(2026, 3, 1, 20))
-    assert b3_ibovespa.needs_fetch(2026, reference)
+    assert not b3_indices.needs_fetch(2025, reference)
+    write_with_mtime(b3_indices.raw_path(2026), partial, datetime(2026, 3, 1, 20))
+    assert b3_indices.needs_fetch(2026, reference)
 
 
 BCB_REPLY = b'[{"data":"02/09/2024","valor":"0.039270"}]'

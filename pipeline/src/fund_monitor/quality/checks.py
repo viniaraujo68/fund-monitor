@@ -33,7 +33,7 @@ FIXED_INCOME_JUMP = 0.03
 FIXED_INCOME = "Renda Fixa"
 REPEATED_QUOTA_DAYS = 3
 UNEXPLAINED_SHARE = 0.01
-SOURCE_TOLERANCE_WEEKDAYS = {"cvm_daily": 2, "cdi": 1, "ima_b": 1, "ibov": 1}
+SOURCE_TOLERANCE_WEEKDAYS = {"cvm_daily": 2, "cdi": 1, "ima_b": 1, "ibov": 1, "ibrx": 1}
 SOURCE_HIGH_EXTRA_WEEKDAYS = 3
 
 

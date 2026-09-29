@@ -161,6 +161,7 @@ def install_sources(root: Path, monkeypatch: pytest.MonkeyPatch, daily: pl.DataF
         "INDICES_PARQUET": root / "indices.parquet",
         "IMA_PARQUET": root / "ima.parquet",
         "IBOVESPA_PARQUET": root / "ibovespa.parquet",
+        "IBRX_PARQUET": root / "ibrx100.parquet",
         "METRICS_DIR": root / "metrics",
         "SITE_DIR": root / "site",
         "TRIAGE_FILE": root / "triage.json",
@@ -178,6 +179,7 @@ def install_sources(root: Path, monkeypatch: pytest.MonkeyPatch, daily: pl.DataF
     ).write_parquet(paths["INDICES_PARQUET"])
     pl.DataFrame({"index": "IMA-B", "date": days, "value": [1000.0 + p for p in range(len(days))]}).write_parquet(paths["IMA_PARQUET"])
     pl.DataFrame({"index": "IBOV", "date": days, "value": [100000.0 + 10 * p for p in range(len(days))]}).write_parquet(paths["IBOVESPA_PARQUET"])
+    pl.DataFrame({"index": "IBXX", "date": days, "value": [40000.0 + 4 * p for p in range(len(days))]}).write_parquet(paths["IBRX_PARQUET"])
 
 
 SAMPLE_DAYS = business_days(date(2025, 1, 2), 300)

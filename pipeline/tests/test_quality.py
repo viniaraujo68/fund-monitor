@@ -75,7 +75,7 @@ def base_inputs(**overrides) -> QualityInputs:
         market_jump_share=pl.DataFrame(
             schema={"date": pl.Date, "cvm_classification": pl.String, "market_share": pl.Float64}
         ),
-        source_dates={"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25)},
+        source_dates={"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25), "ibrx": date(2026, 9, 25)},
         as_of=DAYS[-1],
         reference_date=date(2026, 9, 26),
     )
@@ -214,21 +214,21 @@ def test_duplicate_report_flags_only_conflicting_values() -> None:
 
 
 def test_stale_sources_count_weekdays() -> None:
-    sources = {"cvm_daily": date(2026, 9, 22), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 24), "ibov": None}
+    sources = {"cvm_daily": date(2026, 9, 22), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 24), "ibov": None, "ibrx": date(2026, 9, 25)}
     found = checks.stale_sources(base_inputs(source_dates=sources)).sort("detail")
     assert found.select("detail", "days", "severity").rows() == [("cvm_daily", 3, "medium"), ("ibov", None, "high")]
 
 
 @pytest.mark.parametrize("reference_date", [date(2026, 9, 27), date(2026, 9, 28)])
 def test_weekend_is_not_a_delay(reference_date: date) -> None:
-    sources = {"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25)}
+    sources = {"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25), "ibrx": date(2026, 9, 25)}
     found = checks.stale_sources(base_inputs(source_dates=sources, reference_date=reference_date))
     assert found.is_empty()
     assert found.columns == list(checks.ISSUE_SCHEMA)
 
 
 def test_long_delay_is_high() -> None:
-    sources = {"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 21), "ima_b": date(2026, 9, 18), "ibov": date(2026, 9, 25)}
+    sources = {"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 21), "ima_b": date(2026, 9, 18), "ibov": date(2026, 9, 25), "ibrx": date(2026, 9, 25)}
     found = checks.stale_sources(base_inputs(source_dates=sources, reference_date=date(2026, 9, 28))).sort("detail")
     assert found.select("detail", "days", "severity").rows() == [("cdi", 4, "medium"), ("ima_b", 5, "high")]
 
@@ -267,7 +267,7 @@ def test_registry_mismatch_flags_series_never_reported() -> None:
 
 def test_run_checks_orders_by_severity() -> None:
     daily = daily_rows([{"date": DAYS[0], "shareholders": 0}])
-    sources = {"cvm_daily": None, "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25)}
+    sources = {"cvm_daily": None, "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25), "ibrx": date(2026, 9, 25)}
     found = checks.run_checks(base_inputs(daily=daily, source_dates=sources))
     assert found["severity"].to_list() == sorted(found["severity"].to_list(), key=checks.SEVERITIES.index)
     assert found["severity"].to_list()[0] == "high"

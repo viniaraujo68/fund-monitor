@@ -24,6 +24,7 @@ def source_dates() -> dict[str, date | None]:
         "cdi": indices.filter(pl.col("index") == "cdi")["date"].max(),
         "ima_b": ima.filter(pl.col("index") == "IMA-B")["date"].max(),
         "ibov": pl.read_parquet(config.IBOVESPA_PARQUET)["date"].max(),
+        "ibrx": pl.read_parquet(config.IBRX_PARQUET)["date"].max(),
     }
 
 

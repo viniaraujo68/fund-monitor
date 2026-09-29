@@ -7,7 +7,7 @@ import polars as pl
 from fund_monitor import config
 from fund_monitor.calc.engine import calculate, write_metrics
 from fund_monitor.collect.anbima_ima import collect_ima
-from fund_monitor.collect.b3_ibovespa import collect_ibovespa
+from fund_monitor.collect.b3_indices import collect_b3_indices
 from fund_monitor.collect.bcb_sgs import collect_bcb
 from fund_monitor.collect.cvm_daily import DailyTarget, collect_daily, reported_subclasses
 from fund_monitor.collect.cvm_registry import collect_registry, write_registry
@@ -31,7 +31,7 @@ def run_collect(reference_date: date) -> None:
     run_collect_cvm(reference_date)
     collect_bcb(config.WINDOW_START, reference_date)
     collect_ima(config.WINDOW_START, reference_date)
-    collect_ibovespa(config.WINDOW_START, reference_date)
+    collect_b3_indices(config.WINDOW_START, reference_date)
 
 
 def run_collect_cvm(reference_date: date) -> None:
