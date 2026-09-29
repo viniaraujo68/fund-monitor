@@ -1,6 +1,6 @@
 import type { Issue } from "$lib/data/types";
 import { date, integer, monthName, percent2, percentShort } from "$lib/format";
-import { countsAsOpen, severityRank, sourceLabel } from "$lib/labels";
+import { benchmarkLabel, countsAsOpen, severityRank, sourceLabel } from "$lib/labels";
 
 export const RULE_LABELS: Record<string, string> = {
   missing_report: "Dia sem informe",
@@ -32,8 +32,9 @@ export const RULE_DESCRIPTIONS: Record<string, RuleDescription> = {
   },
   quota_jump: {
     detects: "Variação diária da cota fora do padrão recente da série.",
-    threshold: "5σ em 60 dias e ≥ 0,1 % da cota; 3 % absoluto em RF",
-    severity: "Média; informativo quando ≥ 10 % da classe salta no mesmo dia",
+    threshold: "desvio da média de 60 dias acima de 5σ e de 0,1 % da cota; 3 % absoluto em RF",
+    severity:
+      "Média; informativo em dia de mercado: o Ibovespa ou o IMA-B, o que mais se parece com o fundo, também saiu do padrão no mesmo sentido, ou ≥ 10 % da classe saltou",
   },
   repeated_quota: {
     detects: "Mesma cota em informes seguidos, sinal de cota não atualizada.",
@@ -166,18 +167,27 @@ const JUMP_LIMIT_NAMES: Record<JumpLimit, string> = {
   sigma: "5σ",
 };
 
-const quotaJump = (issue: Issue): string => {
-  const threshold = percentShort(jumpThreshold(issue));
-  const limits: Record<JumpLimit, string> = {
-    absolute: `acima do limite absoluto de ${threshold} para renda fixa`,
-    floor: `desvio da média de 60 dias acima do piso de ${threshold}`,
-    sigma: `desvio da média de 60 dias acima de ${threshold} (5 desvios-padrão)`,
-  };
-  const market = jumpFlags(issue).includes("market-wide")
-    ? "; movimento compartilhado pelo mercado"
-    : "";
-  return `Variação de ${percent2(issue.value)} na cota em ${date(issue.date)}, ${limits[jumpLimit(issue)]}${market}.`;
+const INDEX_FLAG = "index ";
+const MARKET_FLAG = "market-wide";
+
+const jumpIndex = (issue: Issue): string | null => {
+  const flag = jumpFlags(issue).find((part) => part.startsWith(INDEX_FLAG));
+  return flag === undefined ? null : flag.slice(INDEX_FLAG.length).trim();
 };
+
+const jumpReason = (issue: Issue): string => {
+  const index = jumpIndex(issue);
+  if (index !== null)
+    return `dia de mercado: o ${benchmarkLabel(index)} também saiu do padrão no mesmo sentido`;
+  if (jumpFlags(issue).includes(MARKET_FLAG))
+    return "dia de mercado: pelo menos 10 % dos fundos da mesma classificação saltaram";
+  return jumpLimit(issue) === "absolute"
+    ? "acima do limite absoluto de 3 % para renda fixa"
+    : "fora do padrão da própria série e não explicado pelo mercado";
+};
+
+const quotaJump = (issue: Issue): string =>
+  `Salto de ${percent2(issue.value)} na cota em ${date(issue.date)}; ${jumpReason(issue)}.`;
 
 const unexplainedNetAssets = (issue: Issue): string => {
   const month = issue.date === null ? "No mês" : `Em ${monthName(issue.date)}`;
@@ -255,30 +265,45 @@ const RATIO_RULES = new Set(["quota_jump", "unexplained_net_assets"]);
 export interface IssueMeasure {
   value: string;
   limit: string | null;
+  note: string | null;
 }
+
+const jumpDeviationMeasured = (issue: Issue): boolean =>
+  jumpLimit(issue) !== "absolute" && issue.deviation !== null;
 
 export const issueMeasure = (issue: Issue): IssueMeasure | null => {
   if (!RATIO_RULES.has(issue.rule) || issue.value === null) return null;
   if (issue.rule === "quota_jump") {
     const threshold = jumpThreshold(issue);
-    const limit = jumpLimit(issue);
-    const subject = limit === "absolute" ? "limite" : "limite do desvio";
-    return {
-      value: `retorno de ${percent2(issue.value)}`,
-      limit:
-        threshold === null
-          ? null
-          : `${subject} ${percent2(threshold)} (${JUMP_LIMIT_NAMES[limit]})`,
-    };
+    const limit =
+      threshold === null ? null : `limite ±${percent2(threshold)} (${JUMP_LIMIT_NAMES[jumpLimit(issue)]})`;
+    if (jumpDeviationMeasured(issue))
+      return {
+        value: `desvio ${percent2(issue.deviation)}`,
+        limit,
+        note: `retorno do dia ${percent2(issue.value)}`,
+      };
+    return { value: `retorno ${percent2(issue.value)}`, limit, note: null };
   }
   return {
-    value: `resíduo de ${percent2(issue.value)}`,
-    limit: issue.threshold === null ? null : `limite ${percent2(issue.threshold)}`,
+    value: `resíduo ${percent2(issue.value)}`,
+    limit: issue.threshold === null ? null : `limite ±${percent2(issue.threshold)}`,
+    note: null,
   };
 };
 
-export const issueMagnitude = (issue: Issue): number | null =>
-  RATIO_RULES.has(issue.rule) && issue.value !== null ? Math.abs(issue.value) : null;
+export const issueMeasureText = (issue: Issue): string | null => {
+  const measure = issueMeasure(issue);
+  if (measure === null) return null;
+  const main = measure.limit === null ? measure.value : `${measure.value} / ${measure.limit}`;
+  return measure.note === null ? main : `${main} · ${measure.note}`;
+};
+
+export const issueMagnitude = (issue: Issue): number | null => {
+  if (!RATIO_RULES.has(issue.rule) || issue.value === null) return null;
+  if (issue.rule === "quota_jump" && jumpDeviationMeasured(issue)) return Math.abs(issue.deviation ?? 0);
+  return Math.abs(issue.value);
+};
 
 export const isOpenIssue = (issue: Issue): boolean => countsAsOpen(issue.status, issue.severity);
 

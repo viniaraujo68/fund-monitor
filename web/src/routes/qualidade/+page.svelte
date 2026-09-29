@@ -19,6 +19,7 @@
     byTriage,
     issueMagnitude,
     issueMeasure,
+    issueMeasureText,
     issueSpan,
     issueText,
     RULE_DESCRIPTIONS,
@@ -45,6 +46,7 @@
   interface Row extends Issue {
     index: number;
     text: string;
+    measureText: string | null;
     triage: string;
     haystack: string;
   }
@@ -123,6 +125,7 @@
           ...issue,
           index,
           text,
+          measureText: issueMeasureText(issue),
           triage: triageDetail(issue.note, issue.treated_on),
           haystack: normalizeForSearch(
             `${text} ${issue.display_name ?? ""} ${ruleLabel(issue.rule)} ${seriesTerms(issue.series_id)} ${issue.note ?? ""}`,
@@ -391,6 +394,11 @@
         {measure.limit}
       </span>
     {/if}
+    {#if measure.note !== null}
+      <span class="text-base-content/70 block text-xs whitespace-nowrap tabular-nums">
+        {measure.note}
+      </span>
+    {/if}
   {/if}
 {/snippet}
 
@@ -406,6 +414,9 @@
     </div>
     <div class="text-sm">{@render fundCell(row)}</div>
     <p class="text-sm">{row.text}</p>
+    {#if row.measureText !== null}
+      <p class="text-base-content/70 text-xs tabular-nums">{row.measureText}</p>
+    {/if}
     {#if row.triage !== ""}
       <p class="text-base-content/70 text-xs">{row.triage}</p>
     {/if}

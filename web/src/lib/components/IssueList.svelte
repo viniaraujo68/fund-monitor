@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Issue, IssueCounts } from "$lib/data/types";
   import { date, integer } from "$lib/format";
-  import { byTriage, issueText, ruleLabel, triageDetail } from "$lib/issues";
+  import { byTriage, issueMeasureText, issueText, ruleLabel, triageDetail } from "$lib/issues";
   import { OPEN_SEVERITIES, untreatedInfo } from "$lib/labels";
   import SeverityBadge from "./SeverityBadge.svelte";
   import StatusBadge from "./StatusBadge.svelte";
@@ -30,6 +30,7 @@
       <ul class="divide-base-content/10 flex flex-col divide-y">
         {#each ordered as issue, index (index)}
           {@const triage = triageDetail(issue.note, issue.treated_on)}
+          {@const measure = issueMeasureText(issue)}
           <li class="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
               {#if !untreatedInfo(issue.status, issue.severity)}
@@ -42,6 +43,9 @@
               {/if}
             </div>
             <p class="text-sm">{issueText(issue)}</p>
+            {#if measure !== null}
+              <p class="text-base-content/70 text-xs tabular-nums">{measure}</p>
+            {/if}
             {#if triage !== ""}
               <p class="text-base-content/70 text-xs">{triage}</p>
             {/if}
