@@ -1,0 +1,49 @@
+{
+  "entries": [
+    {
+      "rule": "quota_jump",
+      "series_id": null,
+      "date_from": "2024-12-09",
+      "date_to": "2024-12-09",
+      "status": "explained",
+      "note": "Evento de crédito da casa: 13 séries de crédito caíram no mesmo dia (−0,53 % a −0,11 %) sem movimento de mercado. Leitura provável: remarcação de um emissor comum às carteiras; a confirmar com a gestora.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "unexplained_net_assets",
+      "series_id": "54023112000197",
+      "date_from": "2024-09-01",
+      "date_to": "2026-09-30",
+      "status": "limitation",
+      "note": "Distribuição de rendimentos registrada como resgate no informe; a decomposição do PL conta o pagamento duas vezes. Limitação do informe, sem cota ajustada por evento.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "zero_values",
+      "series_id": "34793170000192-BNAX91750170440",
+      "date_from": "2026-03-16",
+      "date_to": "2026-03-16",
+      "status": "source_error",
+      "note": "Linha com cota, PL e cotistas zerados no arquivo da CVM; excluída do cálculo.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "missing_report",
+      "series_id": "34793170000192-BNAX91750170440",
+      "date_from": "2026-03-16",
+      "date_to": "2026-03-16",
+      "status": "source_error",
+      "note": "Consequência da linha zerada de 16/03/2026.",
+      "treated_on": "2026-09-29"
+    },
+    {
+      "rule": "duplicate_report",
+      "series_id": null,
+      "date_from": "2025-04-24",
+      "date_to": "2025-04-24",
+      "status": "source_error",
+      "note": "CVM publicou o mesmo dia como FI e como CLASSES - FIF com valores diferentes; vale a linha CLASSES - FIF.",
+      "treated_on": "2026-09-29"
+    }
+  ]
+}

@@ -64,6 +64,7 @@ Armadilhas:
 - A CVM **republica meses antigos**. O de 202409 tinha Last-Modified de 30/08/2025. Em 27/09/2026 ela regravou os 25 meses. Por isso o coletor pergunta tamanho e Last-Modified antes de baixar e refiltra o bruto a cada execução. O efeito nas séries da gestora está em `findings.md`.
 - 72 linhas de 23 CNPJs aparecem duas vezes no mesmo dia, uma como `FI` e outra como `CLASSES - FIF`, em 19 datas entre 15/10/2024 e 01/07/2025, na passagem para a RCVM 175 (ver 4.1).
 - O último dia do arquivo pode estar incompleto: em 28/09/2026, o dia 25/09/2026 tinha só 8 das 246 classes da gestora (ver 4.1).
+- A CVM consolida o arquivo mensal com atraso de 2 a 3 dias úteis: em 28/09/2026 às 21h, o arquivo de setembro ainda tinha o dia 25 (sexta) incompleto e nada do dia 28 (segunda); o informe não tem linhas de fim de semana. Por isso o "Dados até" do site anda nesse passo, atrás do calendário.
 - Em 26 e 27/09/2026 o portal `dados.cvm.gov.br` não respondeu. A regra 8 existe para esse caso (ver 5).
 
 ### 2.3 Bacen SGS
@@ -325,7 +326,7 @@ Os pares usam 24 meses de informe (18 MB de Parquet).
 
 ## 5. Regras de qualidade
 
-**Princípio: marcar, não excluir.** Um alerta não tira o dado do cálculo. Ele aparece na página do fundo, na página Qualidade e na contagem do topo do site. As exceções são explícitas:
+**Princípio: marcar, não excluir.** Um alerta não tira o dado do cálculo. Ele aparece na página do fundo, na página Qualidade e na contagem do topo do site. O que fazer com cada alerta depois de lido, isto é, registrar a tratativa e o desfecho, está em 5.3. As exceções são explícitas:
 
 - a linha com cota ≤ 0 sai de todo o cálculo (regra 5 e 4.1);
 - na duplicidade, vale a linha `CLASSES - FIF` (regra 7);
@@ -389,6 +390,28 @@ No salto de cota, o `threshold` publicado é o limite que disparou: 3 % no crit�
 - **Linha zerada de 16/03/2026.** `34793170000192-BNAX91750170440` informou cota 0, PL 0 e 0 cotistas, no meio de uma série com cerca de 1.470 cotistas e R$ 119 mi. A linha sai de todo o cálculo e gera dois alertas: valores zerados (alta) e o dia sem informe que ela deixa (baixa).
 - **Subclasse que não herda.** `58327943000103-NANFG1779473395`, pela regra dos 7 dias (ver 4.1).
 - **Fonte atrasada, 27/09/2026.** Com o portal da CVM fora do ar, a última data do informe estava em 22/09/2026: 3 dias de semana de atraso (23, 24 e 25/09) contra a tolerância de 2. Foi numa execução local, não publicada. Na rodada de 28/09/2026, com o portal de volta, não há alerta.
+
+### 5.3 Tratativas
+
+Um alerta tem estado, como no log de operações de uma mesa: fica **aberto** até alguém ler e concluir; depois fica **tratado**, com o motivo. Tratar não altera dado nenhum: o alerta continua na lista, o cálculo não muda e a exclusão de linhas segue só as exceções do princípio acima. A tratativa registra a leitura.
+
+- **Três desfechos.** `explained`: o dado está certo e o movimento tem explicação (evento de crédito, remarcação). `source_error`: a fonte publicou errado (linha zerada, duplicidade). `limitation`: o dado é o que a fonte dá, mas a regra ou o informe não conseguem representá-lo (distribuição informada como resgate, cota sem ajuste por evento).
+- **O arquivo.** `data/triage.json`, editado à mão e versionado no Git, fora do que a Action grava (ela só adiciona `data/parquet` e `data/site`). Cada entrada diz a regra, a série (ou nenhuma, para valer para todas), o período (`date_from` a `date_to`, inclusivo), o desfecho, uma nota de uma ou duas frases e o dia da tratativa. Regra desconhecida, período invertido ou campo a mais param a publicação com erro.
+- **Casamento.** A entrada vale para os alertas da mesma regra e da mesma série (ou de qualquer série, se a entrada não tem série) cuja data cai no período; nas regras com período (dia sem informe, PL sem explicação, cota repetida, fonte atrasada, cadastro), basta sobrepor. Se mais de uma entrada casa, vale a que tem série; no empate, a de tratativa mais recente. Um alerta sem data (série do cadastro que nunca informou) não casa com nenhuma entrada. A entrada vale para as rodadas seguintes: um alerta novo da mesma regra, série e período já nasce tratado.
+- **Informativo não é aberto.** O alerta `info` (dia de mercado, histórico curto) já é explicado pela própria regra. Ele pode receber tratativa, mas as contagens de abertos, do site e de cada fundo, só olham alta, média e baixa.
+- **Eventos.** Saltos de cota de 3 ou mais séries na mesma data viram um evento na página Qualidade, com a severidade mais alta do grupo, o número de CNPJs distintos e o estado comum a todas as séries (se uma estiver aberta, o evento está aberto). Um evento se trata com uma entrada sem série para a data.
+
+Tratativas iniciais (29/09/2026, a revisar):
+
+| Regra | Série | Período | Desfecho | Alertas |
+| --- | --- | --- | --- | --- |
+| Salto de cota | todas | 09/12/2024 | `explained`: evento de crédito da casa (5.2) | 13 |
+| PL sem explicação | `54023112000197` | 01/09/2024 a 30/09/2026 | `limitation`: distribuição informada como resgate (5.2 e 7) | 11 |
+| Valores zerados | `34793170000192-BNAX91750170440` | 16/03/2026 | `source_error`: linha zerada da CVM | 1 |
+| Dia sem informe | `34793170000192-BNAX91750170440` | 16/03/2026 | `source_error`: consequência da linha zerada | 1 |
+| Informe duplicado | todas | 24/04/2025 | `source_error`: `FI` e `CLASSES - FIF` com valores diferentes | 4 |
+
+São 30 alertas tratados dos 148. Ficam **69 abertos, todos médios**: 59 saltos de cota isolados e 10 PL sem explicação; nenhum alto nem baixo. Dos 9 eventos de salto (09/12/2024 com 13 séries; 18/12/2024 com 7; 03/04/2025 com 3; 04/04/2025 com 6; 17/10/2025 com 4; 05/12/2025 com 24, informativo; 13/03/2026 com 13; 19/03/2026 com 3; 13/08/2026 com 3), só o de 09/12/2024 está tratado.
 
 ## 6. O que cada gráfico e tabela mostra
 

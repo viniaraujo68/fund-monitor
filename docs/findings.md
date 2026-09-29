@@ -92,3 +92,5 @@ As armadilhas encontradas na coleta, com as contagens, estão em `DECISIONS.md` 
 ## Conferência externa
 
 O IMA-B de 12 e 24 meses publicado nesta rodada bate nas 4 casas com a variação que a própria ANBIMA publica no arquivo de 24/09/2026 (`DECISIONS.md` §2.4).
+
+Os casos dos itens 1, 3, 4 e 5 estão registrados como tratativas em `data/triage.json` (`DECISIONS.md` §5.3).

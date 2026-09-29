@@ -17,6 +17,7 @@ from fund_monitor.publish import site_json
 from fund_monitor.publish.names import display_name, is_structural_vehicle, unique_display_names
 from fund_monitor.quality.checks import ISSUE_SCHEMA
 from fund_monitor.quality.report import run_quality
+from fund_monitor.quality.triage import apply_triage
 
 
 def test_rounded_drops_non_finite_and_negative_zero() -> None:
@@ -121,7 +122,7 @@ def test_inherited_until_comes_from_the_whole_series() -> None:
     quotas = quotas_frame("A-S1", days, compound(1.0, [0.0005] * 599)).with_columns(inherited=pl.col("date") <= days[10])
     windows = window_returns(quotas, levels_frame(days, 0.05), as_of=days[-1])
     risk = pl.DataFrame(schema={"window": pl.String, "volatility": pl.Float64, "max_drawdown": pl.Float64, "sharpe": pl.Float64})
-    summary = site_json.build_summary(fund_attribute(), windows, risk, None, None, pl.DataFrame(schema=ISSUE_SCHEMA))
+    summary = site_json.build_summary(fund_attribute(), windows, risk, None, None, apply_triage(pl.DataFrame(schema=ISSUE_SCHEMA), []))
     assert summary.inherited_until == days[10]
     assert summary.first_date == days[0]
 
@@ -161,6 +162,17 @@ def test_short_function_words_are_lowercase() -> None:
     assert display_name("ICATU VANGUARDA RETORNO ÀS METAS POR PRAZO AO INVESTIDOR À VISTA FIF", None) == "Retorno às Metas por Prazo ao Investidor à Vista"
 
 
+SAMPLE_TRIAGE = {
+    "rule": "zero_values",
+    "series_id": "A",
+    "date_from": "2026-01-30",
+    "date_to": "2026-01-30",
+    "status": "source_error",
+    "note": "Linha zerada.",
+    "treated_on": "2026-02-27",
+}
+
+
 @pytest.fixture(scope="module")
 def published_site(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     daily, peer_daily, registry = sample_sources()
@@ -168,6 +180,7 @@ def published_site(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
         install_sources(tmp_path_factory.mktemp("site"), monkeypatch, daily, peer_daily, SAMPLE_DAYS)
         write_metrics(calculate(registry))
         run_quality(registry, date(2026, 2, 27))
+        config.TRIAGE_FILE.write_text(json.dumps({"entries": [SAMPLE_TRIAGE]}), encoding="utf-8")
         site_json.publish_site(registry, date(2026, 2, 27))
         yield config.SITE_DIR
 
@@ -181,6 +194,26 @@ def test_published_site_matches_contract(published_site: Path) -> None:
     assert detail.peers is not None
     assert detail.peers.peer_count == 6
     assert detail.summary.issues.high == 1
+    assert detail.summary.open_issues.high == 0
+    (zeroed,) = [issue for issue in detail.issues if issue.rule == "zero_values"]
+    assert (zeroed.status, zeroed.note, zeroed.treated_on) == ("source_error", "Linha zerada.", date(2026, 2, 27))
+    assert all(issue.status == "open" for issue in detail.issues if issue.rule != "zero_values")
+
+
+def test_published_quality_counts_open_and_treated_issues(published_site: Path) -> None:
+    quality = site_json.QualityDocument.model_validate_json((published_site / "quality.json").read_text())
+    meta = site_json.Meta.model_validate_json((published_site / "meta.json").read_text())
+    summary = quality.summary
+    assert meta.quality == summary
+    assert set(summary.open_by_severity) == {"high", "medium", "low"}
+    assert set(summary.by_status) == {"open", "explained", "source_error", "limitation"}
+    assert summary.open_by_severity["high"] == 0
+    assert summary.by_status["source_error"] == summary.treated == 1
+    assert sum(summary.by_status.values()) == len(quality.issues)
+    open_listed = [issue for issue in quality.issues if issue.status == "open" and issue.severity != "info"]
+    assert sum(summary.open_by_severity.values()) == len(open_listed)
+    funds = [site_json.FundSummary.model_validate(fund) for fund in json.loads((published_site / "funds.json").read_text())]
+    assert all(fund.open_issues.info == 0 for fund in funds)
 
 
 def test_publish_fails_when_the_written_site_breaks_the_contract(published_site: Path, tmp_path: Path) -> None:
@@ -192,3 +225,63 @@ def test_publish_fails_when_the_written_site_breaks_the_contract(published_site:
     (site / "meta.json").write_text(json.dumps({**meta, "unexpected": 1}))
     with pytest.raises(ValueError, match="unexpected"):
         site_json.verify_site(site)
+
+
+def test_publish_fails_when_status_counts_disagree_with_the_list(published_site: Path, tmp_path: Path) -> None:
+    site = shutil.copytree(published_site, tmp_path / "site")
+    quality = json.loads((site / "quality.json").read_text())
+    quality["summary"]["by_status"]["open"] += 1
+    (site / "quality.json").write_text(json.dumps(quality))
+    with pytest.raises(ValueError, match="status counts"):
+        site_json.verify_site(site)
+
+
+def jump_issues(rows: list[tuple[str, date, str, str, str | None]]) -> pl.DataFrame:
+    schema = {**ISSUE_SCHEMA, "status": pl.String, "note": pl.String, "treated_on": pl.Date}
+    defaults = dict.fromkeys(schema)
+    records = [
+        {**defaults, "rule": "quota_jump", "series_id": key, "date": day, "severity": severity, "status": status, "note": note}
+        for key, day, severity, status, note in rows
+    ]
+    return pl.DataFrame(records, schema=schema)
+
+
+EVENT_DAY = date(2024, 12, 9)
+OTHER_DAY = date(2025, 4, 3)
+
+
+def test_events_group_jumps_of_at_least_three_series() -> None:
+    issues = jump_issues(
+        [
+            ("A-S1", EVENT_DAY, "medium", "explained", "Crédito."),
+            ("A-S2", EVENT_DAY, "medium", "explained", "Crédito."),
+            ("B", EVENT_DAY, "info", "explained", "Crédito."),
+            ("C", OTHER_DAY, "medium", "open", None),
+            ("D", OTHER_DAY, "medium", "open", None),
+        ]
+    )
+    (event,) = site_json.build_events(issues, {"A-S1": "Alfa I", "B": "Beta"})
+    assert event.date == EVENT_DAY
+    assert event.rule == "quota_jump"
+    assert event.severity == "medium"
+    assert (event.status, event.note) == ("explained", "Crédito.")
+    assert event.series_ids == ["A-S1", "A-S2", "B"]
+    assert event.display_names == ["Alfa I", "A-S2", "Beta"]
+    assert event.cnpj_count == 2
+
+
+def test_event_with_mixed_status_stays_open_and_events_are_newest_first() -> None:
+    issues = jump_issues(
+        [
+            ("A", EVENT_DAY, "medium", "explained", "Crédito."),
+            ("B", EVENT_DAY, "medium", "explained", "Crédito."),
+            ("C", EVENT_DAY, "medium", "open", None),
+            ("A", OTHER_DAY, "info", "open", None),
+            ("B", OTHER_DAY, "info", "open", None),
+            ("C", OTHER_DAY, "info", "open", None),
+        ]
+    )
+    newest, oldest = site_json.build_events(issues, {})
+    assert (newest.date, newest.severity, newest.status, newest.note) == (OTHER_DAY, "info", "open", None)
+    assert (oldest.date, oldest.status, oldest.note) == (EVENT_DAY, "open", None)
+    assert oldest.cnpj_count == 3

@@ -38,7 +38,7 @@ Guardar cada versão do bruto importa porque a CVM regrava o histórico. Em 27/0
 - **As 9 regras como testes de dados** dentro do fluxo, com as mesmas funções de hoje ou com Great Expectations.
 - **Severidade alta bloqueia a publicação da série afetada**, não do site inteiro. Uma linha zerada num fundo não deveria segurar os outros 74.
 - **Relatório diário para a mesa com o que é novo.** Hoje a lista acumula 24 meses: são 148 alertas, e o alerta de ontem se perde entre eles.
-- **Estado do alerta.** Visto, explicado, erro da fonte. Hoje o alerta não tem dono nem status, e o mesmo caso aparece todo dia.
+- **Estado do alerta.** Visto, explicado, erro da fonte. Hoje o estado vem de `data/triage.json`, editado à mão (`DECISIONS.md` §5.3), e o alerta ainda não tem dono nem prazo. Em produção, o `triage.json` vira uma tabela com dono e prazo por alerta, alimentada pela mesa.
 - **Limiares revisados com a mesa.** 5 desvios-padrão, 0,1 %, 1 % do PL e 10 % do mercado foram calibrados olhando 24 meses de uma gestora. Precisam de uma revisão com quem usa o alerta.
 
 ## 5. Observabilidade

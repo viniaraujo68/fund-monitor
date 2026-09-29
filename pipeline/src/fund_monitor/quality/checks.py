@@ -329,6 +329,19 @@ RULES = (
 )
 
 
+RULE_NAMES = (
+    "missing_report",
+    "quota_jump",
+    "repeated_quota",
+    "unexplained_net_assets",
+    "zero_values",
+    "short_history",
+    "duplicate_report",
+    "stale_source",
+    "registry_mismatch",
+)
+
+
 def run_checks(inputs: QualityInputs) -> pl.DataFrame:
     severity_rank = pl.col("severity").replace_strict({s: rank for rank, s in enumerate(SEVERITIES)}, return_dtype=pl.Int8)
     return pl.concat([rule(inputs) for rule in RULES]).sort(severity_rank, "rule", "series_id", "date", nulls_last=True)

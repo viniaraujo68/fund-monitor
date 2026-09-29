@@ -16,6 +16,7 @@ from fund_monitor.calc.series import series_id
 from fund_monitor.publish.names import is_structural_vehicle, unique_display_names
 from fund_monitor.quality.checks import SEVERITIES
 from fund_monitor.quality.report import COVERAGE_METRIC, ISSUES_METRIC, SOURCES_METRIC
+from fund_monitor.quality.triage import OPEN, OPEN_SEVERITIES, STATUSES, apply_triage, is_open, load_triage
 from fund_monitor.universe import GENERAL_PUBLIC, select_manager_series, select_monitored_series, select_peer_universe
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ INDEX_DIGITS = 4
 WINDOWS = ("mtd", "ytd", *MONTHLY_WINDOWS, SINCE_START)
 FUNDS_DIRECTORY = "funds"
 DI_BENCHMARK = "DI de um dia"
+EVENT_RULE = "quota_jump"
+EVENT_MIN_SERIES = 3
 
 
 class Contract(BaseModel):
@@ -43,6 +46,9 @@ class QualitySummary(Contract):
     checked_days: int
     by_severity: dict[str, int]
     by_rule: dict[str, int]
+    open_by_severity: dict[str, int]
+    by_status: dict[str, int]
+    treated: int
 
 
 class UniverseCounts(Contract):
@@ -108,6 +114,7 @@ class FundSummary(Contract):
     peer_count: int
     peer_return_percentile_12m: float | None
     issues: IssueCounts
+    open_issues: IssueCounts
 
 
 class WindowRow(Contract):
@@ -190,6 +197,20 @@ class Issue(Contract):
     value: float | None
     threshold: float | None
     detail: str | None
+    status: str
+    note: str | None
+    treated_on: date | None
+
+
+class QualityEvent(Contract):
+    rule: str
+    date: date
+    severity: str
+    status: str
+    note: str | None
+    series_ids: list[str]
+    display_names: list[str]
+    cnpj_count: int
 
 
 class FundDetail(Contract):
@@ -230,6 +251,7 @@ class Aggregates(Contract):
 class QualityDocument(Contract):
     summary: QualitySummary
     issues: list[Issue]
+    events: list[QualityEvent]
 
 
 def rounded(value: float | None, digits: int) -> float | None:
@@ -258,6 +280,14 @@ def by_series(frame: pl.DataFrame) -> dict[str, pl.DataFrame]:
 def issue_counts(issues: pl.DataFrame) -> IssueCounts:
     counts = dict(issues.group_by("severity").len().iter_rows()) if issues.height else {}
     return IssueCounts(**{severity: counts.get(severity, 0) for severity in SEVERITIES})
+
+
+def open_issue_counts(issues: pl.DataFrame) -> IssueCounts:
+    return issue_counts(issues.filter(is_open()))
+
+
+def severity_rank() -> pl.Expr:
+    return pl.col("severity").replace_strict({s: rank for rank, s in enumerate(SEVERITIES)}, return_dtype=pl.Int8)
 
 
 def window_value(frame: pl.DataFrame, window: str, column: str, digits: int = RETURN_DIGITS) -> float | None:
@@ -316,6 +346,7 @@ def build_summary(
         peer_count=position["peer_count"] if position else 0,
         peer_return_percentile_12m=rounded(position["fund_return_percentile"], RATIO_DIGITS) if position else None,
         issues=issue_counts(issues),
+        open_issues=open_issue_counts(issues),
     )
 
 
@@ -432,8 +463,42 @@ def build_issues(issues: pl.DataFrame, names: dict[str, str]) -> list[Issue]:
             value=rounded(row["value"], RETURN_DIGITS),
             threshold=rounded(row["threshold"], RETURN_DIGITS),
             detail=row["detail"],
+            status=row["status"],
+            note=row["note"],
+            treated_on=row["treated_on"],
         )
         for row in issues.iter_rows(named=True)
+    ]
+
+
+def build_events(issues: pl.DataFrame, names: dict[str, str]) -> list[QualityEvent]:
+    common_status = pl.when(pl.col("status").n_unique() == 1).then(pl.col("status").first()).otherwise(pl.lit(OPEN))
+    common_note = pl.when(pl.col("note").n_unique() == 1).then(pl.col("note").first())
+    events = (
+        issues.filter(pl.col("rule") == EVENT_RULE, pl.col("series_id").is_not_null(), pl.col("date").is_not_null())
+        .group_by("date")
+        .agg(
+            pl.col("series_id").unique().sort().alias("series_ids"),
+            pl.col("severity").sort_by(severity_rank()).first().alias("severity"),
+            common_status.alias("status"),
+            common_note.alias("note"),
+            pl.col("series_id").str.split("-").list.first().n_unique().alias("cnpj_count"),
+        )
+        .filter(pl.col("series_ids").list.len() >= EVENT_MIN_SERIES)
+        .sort("date", descending=True)
+    )
+    return [
+        QualityEvent(
+            rule=EVENT_RULE,
+            date=row["date"],
+            severity=row["severity"],
+            status=row["status"],
+            note=row["note"],
+            series_ids=row["series_ids"],
+            display_names=[names.get(key, key) for key in row["series_ids"]],
+            cnpj_count=row["cnpj_count"],
+        )
+        for row in events.iter_rows(named=True)
     ]
 
 
@@ -444,6 +509,9 @@ def quality_summary(issues: pl.DataFrame, metrics: dict[str, pl.DataFrame]) -> Q
         checked_days=coverage["checked_days"],
         by_severity=issue_counts(issues).model_dump(),
         by_rule=dict(issues.group_by("rule").len().sort("rule").iter_rows()) if issues.height else {},
+        open_by_severity={severity: count for severity, count in open_issue_counts(issues).model_dump().items() if severity in OPEN_SEVERITIES},
+        by_status={status: issues.filter(pl.col("status") == status).height for status in STATUSES},
+        treated=issues.filter(pl.col("status") != OPEN).height,
     )
 
 
@@ -466,6 +534,15 @@ def verify_site(directory: Path) -> None:
         raise ValueError(f"site: {meta.universe.monitored_series} monitored series, {len(funds)} summaries, {len(details)} fund files")
     if sum(quality.summary.by_severity.values()) != len(quality.issues):
         raise ValueError(f"site: quality summary counts {sum(quality.summary.by_severity.values())} issues, list has {len(quality.issues)}")
+    if sum(quality.summary.by_status.values()) != len(quality.issues):
+        raise ValueError(f"site: quality status counts {sum(quality.summary.by_status.values())} issues, list has {len(quality.issues)}")
+    if quality.summary.treated != len(quality.issues) - quality.summary.by_status[OPEN]:
+        raise ValueError(f"site: {quality.summary.treated} treated issues, status counts say {len(quality.issues) - quality.summary.by_status[OPEN]}")
+    open_listed = sum(1 for issue in quality.issues if issue.status == OPEN and issue.severity in OPEN_SEVERITIES)
+    if sum(quality.summary.open_by_severity.values()) != open_listed:
+        raise ValueError(f"site: quality summary counts {sum(quality.summary.open_by_severity.values())} open issues, list has {open_listed}")
+    if meta.quality != quality.summary:
+        raise ValueError("site: meta and quality.json disagree on the quality summary")
     for path in details:
         detail = FundDetail.model_validate_json(path.read_text(encoding="utf-8"))
         if detail.summary.series_id != path.stem:
@@ -486,9 +563,9 @@ def publish_site(registry: pl.DataFrame, reference_date: date) -> None:
     monthly = by_series(metrics["monthly_flows"])
     flows = {row["series_id"]: row for row in metrics["flow_summary"].iter_rows(named=True)}
     positions = {row["series_id"]: row for row in metrics["peer_positions"].iter_rows(named=True)}
-    issues = metrics[ISSUES_METRIC]
+    issues = apply_triage(metrics[ISSUES_METRIC], load_triage(config.TRIAGE_FILE))
     issues_by_series = by_series(issues.filter(pl.col("series_id").is_not_null()))
-    empty = {name: frame.clear() for name, frame in metrics.items()}
+    empty = {name: frame.clear() for name, frame in metrics.items()} | {ISSUES_METRIC: issues.clear()}
 
     summaries, details = [], {}
     for attribute in attributes.iter_rows(named=True):
@@ -566,8 +643,18 @@ def publish_site(registry: pl.DataFrame, reference_date: date) -> None:
     write_json(config.SITE_DIR / "meta.json", meta)
     write_json(config.SITE_DIR / "funds.json", summaries)
     write_json(config.SITE_DIR / "aggregates.json", aggregates)
-    write_json(config.SITE_DIR / "quality.json", QualityDocument(summary=quality, issues=build_issues(issues, names)))
+    write_json(
+        config.SITE_DIR / "quality.json",
+        QualityDocument(summary=quality, issues=build_issues(issues, names), events=build_events(issues, names)),
+    )
     for key, detail in details.items():
         write_json(config.SITE_DIR / FUNDS_DIRECTORY / f"{key}.json", detail)
     verify_site(config.SITE_DIR)
-    logger.info("site: %d funds, %d issues written to %s", len(summaries), issues.height, config.SITE_DIR)
+    logger.info(
+        "site: %d funds, %d issues (%d treated, %d open) written to %s",
+        len(summaries),
+        issues.height,
+        quality.treated,
+        sum(quality.open_by_severity.values()),
+        config.SITE_DIR,
+    )

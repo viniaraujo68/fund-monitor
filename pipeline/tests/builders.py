@@ -163,6 +163,7 @@ def install_sources(root: Path, monkeypatch: pytest.MonkeyPatch, daily: pl.DataF
         "IBOVESPA_PARQUET": root / "ibovespa.parquet",
         "METRICS_DIR": root / "metrics",
         "SITE_DIR": root / "site",
+        "TRIAGE_FILE": root / "triage.json",
     }
     for name, path in paths.items():
         monkeypatch.setattr(config, name, path)

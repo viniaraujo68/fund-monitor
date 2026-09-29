@@ -6,6 +6,7 @@ DATA_DIR = REPO_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 PARQUET_DIR = DATA_DIR / "parquet"
 SITE_DIR = DATA_DIR / "site"
+TRIAGE_FILE = DATA_DIR / "triage.json"
 
 MANAGER_CNPJ = "68622174000120"
 WINDOW_START = date(2024, 9, 1)
