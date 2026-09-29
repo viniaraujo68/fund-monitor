@@ -1,8 +1,8 @@
 # Achados nos dados reais
 
-O que o pipeline encontrou nos dados públicos. Rodada de referência: último dia completo do informe **24/09/2026**, execução de 28/09/2026. Universo: 75 séries não exclusivas da Icatu Vanguarda (44 de Público Geral).
+O que o pipeline encontrou nos dados públicos. Rodada de referência: último dia completo do informe **24/09/2026**, recalculada em 29/09/2026 com a regra nova de dia de mercado e as tratativas. O site é atualizado todo dia útil; as contagens abaixo são dessa rodada. Universo: 75 séries não exclusivas da Icatu Vanguarda (44 de Público Geral).
 
-As regras, os limiares e os cortes estão em `docs/DECISIONS.md`, que é a página Metodologia do site. Este arquivo não repete regra: aponta para a seção e registra só o que os dados mostraram.
+As regras, os limiares e os cortes estão em `docs/DECISIONS.md`; a página "Como funciona" do site resume os dois. Este arquivo não repete regra: aponta para a seção e registra só o que os dados mostraram.
 
 De onde vêm os números:
 
@@ -14,8 +14,8 @@ De onde vêm os números:
 
 | Regra | Severidade | Alertas | Leitura |
 | --- | --- | --- | --- |
-| Salto de cota isolado | média | 72 | Movimento fora do padrão do próprio fundo e **não** compartilhado pelo mercado |
-| Salto de cota em dia de mercado | info | 35 | Salto num dia em que ≥ 10 % das séries do universo de pares na mesma classificação CVM também saltaram |
+| Salto de cota isolado | média | 56 | Movimento fora do padrão do próprio fundo e **não** explicado pelo mercado |
+| Salto de cota em dia de mercado | info | 51 | Salto num dia em que o índice mais correlacionado com o fundo também saiu do padrão no mesmo sentido, ou em que ≥ 10 % das séries do universo de pares na mesma classificação CVM saltaram |
 | PL sem explicação | média | 21 | Variação mensal do PL que captação e rentabilidade não explicam (resíduo acima de 1 % do PL, em módulo) |
 | Histórico curto | info | 14 | Série sem 12 meses: fora dos pares e sem % do CDI; continua na tabela e nos destaques de captação, com `*` |
 | Informe duplicado | média | 4 | Mesma série e dia informados duas vezes, como `FI` e `CLASSES - FIF` |
@@ -26,6 +26,10 @@ De onde vêm os números:
 | Cota repetida | média | 0 | |
 
 Foram verificados **32.979 pares série × dia útil** em 75 séries.
+
+Depois das tratativas de 29/09/2026 (`DECISIONS.md` §5.3): 148 alertas, **30 abertos** (todos médios: 28 saltos de cota e 2 PL sem explicação), 53 tratados (24 explicados, 6 erros da fonte, 23 limitações) e 65 informativos. Antes da regra nova e das tratativas eram 69 abertos.
+
+**Taxa de acerto do salto de cota** (107 alertas): 13 eram fato real da casa (o evento de crédito de 09/12/2024); 62 eram mercado (51 reconhecidos pela regra e 11 dias de mercado global em fundos no exterior, confirmados pelo S&P 500 no FRED); 4 eram limitação do informe (pagamento mensal dos incentivados); 28 seguem sem leitura. Três dias entre os abertos parecem outro evento da casa, com várias séries de crédito caindo juntas sem mercado: 18 e 19/03/2026 e 13/08/2026, a investigar com a carteira. **PL sem explicação** (21): 19 são limitação (distribuição como resgate e fluxo no meio do mês, com resíduo diário zero) e 2 seguem abertos.
 
 Uma ressalva vale para as contagens: numa classe com duas subclasses, um fato anterior à divisão aparece como um alerta em cada subclasse (`DECISIONS.md` §5, "Linhas herdadas"). Os itens 1 e 4 dizem quantos fatos distintos há por trás de cada contagem.
 
@@ -89,8 +93,27 @@ Em 27/09, a CVM regravou os 25 meses do informe (tamanho e Last-Modified mudaram
 
 As armadilhas encontradas na coleta, com as contagens, estão em `DECISIONS.md` §2.1 a §2.6: cadastro com uma linha por gestor, classe repetida por custodiante ou controlador, aspas literais nos nomes das subclasses, `CNPJ_Classe` repetido, cadastro legado com tudo cancelado, séries do Bacen paradas, informe histórico só até 2020, republicação de meses antigos, feriado vazio na ANBIMA e fechamento do dia antes do fim do pregão na B3.
 
+## 13. Achado da revisão: dias de mercado que a regra não reconhecia
+
+Na revisão de 29/09/2026, o site dizia "queda isolada: fora do padrão da própria série e não compartilhada pelo mercado" em dias em que o mercado mexeu forte:
+
+| Data | Mercado no dia | Séries marcadas como isoladas |
+| --- | --- | --- |
+| 18/12/2024 | Ibovespa −3,15 % (−3,30σ) | Data Alvo 2050 e 2060, Igaraté Long Biased, FIFE, FIC, Long Biased IBOV e Long Biased IMA B-5 |
+| 04/04/2025 | Ibovespa −2,96 % (−2,96σ) | os cinco Igaraté |
+| 13/03/2026 | IMA-B −1,21 % (−4,86σ) | Iporã PG Inflação, IPCA Dinâmico |
+| 16/03/2026 | IMA-B +1,56 % (+5,12σ) | Inflação Longa, Inflação Longa FIC |
+
+A causa estava na própria regra. O "dia de mercado" era medido pela fração de fundos da mesma classificação CVM que saltaram no dia, e o Multimercado e a Renda Fixa do universo de pares são dominados por fundos DI: um dia forte de bolsa ou de IMA-B quase nunca chegava a 10 % da classe. Na prática, a regra só reconhecia mercado em Ações.
+
+O conserto foi olhar o índice que mais se parece com cada fundo. Se o Ibovespa ou o IMA-B, com correlação de pelo menos 0,5 nos 60 retornos anteriores, também saiu do padrão no mesmo dia e no mesmo sentido (acima de 2,5σ), o salto vira informativo. Os 16 alertas da tabela deixaram de ser isolados. O evento de crédito de 09/12/2024 continuou isolado nas 13 séries: nesse dia o Ibovespa subiu 1,00 % e o IMA-B caiu 0,24 %, ambos dentro do padrão, e os fundos de crédito quase não se parecem com os dois (`DECISIONS.md` §5.1).
+
+Os fundos no exterior não têm índice coletado: os dias de mercado global deles (03/04/2025, 04/04/2025 e 09/04/2025, por exemplo) viraram tratativa à mão, com o movimento do mercado na nota.
+
+A lição para a apresentação: uma regra que parecia certa nos 24 meses de calibração tinha um ponto cego que só apareceu quando alguém leu os alertas um por um. Ler os alertas é parte do trabalho, e a tratativa é o registro disso.
+
 ## Conferência externa
 
 O IMA-B de 12 e 24 meses publicado nesta rodada bate nas 4 casas com a variação que a própria ANBIMA publica no arquivo de 24/09/2026 (`DECISIONS.md` §2.4).
 
-Os casos dos itens 1, 3, 4 e 5 estão registrados como tratativas em `data/triage.json` (`DECISIONS.md` §5.3).
+Os casos dos itens 1, 3, 4, 5 e 7 e os dias de mercado global do item 13 estão registrados como tratativas em `data/triage.json` (`DECISIONS.md` §5.3).
