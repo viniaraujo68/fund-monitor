@@ -29,9 +29,6 @@ export const monthEndIndexes = (dates: string[]): number[] =>
     index === dates.length - 1 || dates[index + 1]?.slice(0, 7) !== day.slice(0, 7) ? [index] : [],
   );
 
-export const difference = (left: number | null, right: number | null): number | null =>
-  left === null || right === null ? null : left - right;
-
 export const hasPeerGroup = (peers: PeerPosition | null): peers is PeerPosition =>
   peers !== null && peers.peer_count >= MIN_PEERS;
 

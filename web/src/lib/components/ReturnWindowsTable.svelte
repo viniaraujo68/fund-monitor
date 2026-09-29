@@ -1,30 +1,57 @@
 <script lang="ts">
   import { DataTable, type Column } from "@viniaraujo68/plinth/table";
   import type { FundDetail, WindowRow } from "$lib/data/types";
-  import { difference, marketBenchmarks } from "$lib/fund";
-  import { date, integer, percent2 } from "$lib/format";
+  import { CDI, marketBenchmarks } from "$lib/fund";
+  import { date, integer, percent2, percentPoints } from "$lib/format";
   import { benchmarkLabel, windowLabel } from "$lib/labels";
 
   const { detail }: { detail: FundDetail } = $props();
 
   const benchmarks = $derived(marketBenchmarks(detail.summary));
 
-  const excess = (row: WindowRow): number | null => difference(row.fund_return, row.cdi_return);
+  const ANNUALIZATION_HIDDEN = "12m";
+
+  const excessOver = (row: WindowRow, benchmark: string): number | null =>
+    row.excess_returns[benchmark] ?? null;
 
   const benchmarkReturn = (row: WindowRow, benchmark: string): number | null =>
     row.benchmark_returns[benchmark] ?? null;
 
-  const metrics = $derived<{ key: string; label: string; read: (row: WindowRow) => number | null }[]>([
-    { key: "fund_return", label: "Fundo", read: (row) => row.fund_return },
-    { key: "cdi_return", label: "CDI", read: (row) => row.cdi_return },
-    { key: "pct_cdi", label: "% do CDI", read: (row) => row.pct_cdi },
+  type Metric = {
+    key: string;
+    label: string;
+    read: (row: WindowRow) => number | null;
+    format: (value: number | null) => string;
+  };
+
+  const metrics = $derived<Metric[]>([
+    { key: "fund_return", label: "Fundo", read: (row) => row.fund_return, format: percent2 },
+    { key: "cdi_return", label: "CDI", read: (row) => row.cdi_return, format: percent2 },
+    { key: "pct_cdi", label: "% do CDI", read: (row) => row.pct_cdi, format: percent2 },
     ...benchmarks.map((benchmark) => ({
       key: `benchmark_${benchmark}`,
       label: benchmarkLabel(benchmark),
       read: (row: WindowRow) => benchmarkReturn(row, benchmark),
+      format: percent2,
     })),
-    { key: "excess", label: "Excesso sobre o CDI", read: excess },
-    { key: "fund_annualized", label: "Anualizado", read: (row) => row.fund_annualized },
+    {
+      key: "excess_cdi",
+      label: "vs CDI",
+      read: (row) => excessOver(row, CDI),
+      format: percentPoints,
+    },
+    ...benchmarks.map((benchmark) => ({
+      key: `excess_${benchmark}`,
+      label: `vs ${benchmarkLabel(benchmark)}`,
+      read: (row: WindowRow) => excessOver(row, benchmark),
+      format: percentPoints,
+    })),
+    {
+      key: "fund_annualized",
+      label: "Anualizado",
+      read: (row) => (row.window === ANNUALIZATION_HIDDEN ? null : row.fund_annualized),
+      format: percent2,
+    },
   ]);
 
   const columns = $derived<Column<WindowRow>[]>([
@@ -42,7 +69,7 @@
       numeric: true,
       sortable: false,
       class: "whitespace-nowrap",
-      value: (row: WindowRow) => percent2(metric.read(row)),
+      value: (row: WindowRow) => metric.format(metric.read(row)),
     })),
   ]);
 </script>
@@ -71,7 +98,7 @@
       {#each metrics as metric (metric.key)}
         <div class="flex items-baseline justify-between gap-2">
           <dt class="text-base-content/70 text-xs">{metric.label}</dt>
-          <dd class="tabular-nums">{percent2(metric.read(row))}</dd>
+          <dd class="tabular-nums">{metric.format(metric.read(row))}</dd>
         </div>
       {/each}
     </dl>
@@ -87,8 +114,9 @@
     <div class="flex flex-col gap-1">
       <h2 id="windows-title" class="text-base font-semibold">Janelas de retorno</h2>
       <p class="text-base-content/70 text-xs">
-        Janelas menores que 12 meses não são anualizadas nem têm % do CDI. Excesso sobre o CDI é a diferença entre os
-        retornos do fundo e do CDI na mesma janela.
+        % do CDI em toda janela com CDI positivo. "vs" é a diferença, em pontos percentuais, entre o retorno do
+        fundo e o do benchmark na mesma janela. Anualizado só em 24 meses e desde o início com um ano ou mais: em 12
+        meses ele quase repete o acumulado.
       </p>
     </div>
     <DataTable

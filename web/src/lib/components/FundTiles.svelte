@@ -9,7 +9,7 @@
     peerGapReason,
     SHARPE_HIDDEN_REASON,
   } from "$lib/fund";
-  import { DASH, date, integer, money, moneyCompact, peerRank, percent2, ratio2 } from "$lib/format";
+  import { DASH, date, integer, money, moneyCompact, peerRank, percent2, percentPoints, ratio2 } from "$lib/format";
   import { benchmarkLabel } from "$lib/labels";
   import StatTile from "./StatTile.svelte";
 
@@ -35,9 +35,16 @@
   );
 
   const returnHint = $derived(
-    summary.pct_cdi_12m === null
+    summary.excess_primary_12m === null
       ? missing(summary.return_12m, "sem retorno na janela")
-      : `${percent2(summary.pct_cdi_12m)} do CDI`,
+      : [
+          `${percentPoints(summary.excess_primary_12m)} vs ${benchmarkLabel(summary.primary_benchmark)}`,
+          summary.primary_benchmark === "cdi" || summary.pct_cdi_12m === null
+            ? null
+            : `${percent2(summary.pct_cdi_12m)} do CDI`,
+        ]
+          .filter((part) => part !== null)
+          .join(" · "),
   );
 
   const drawdownHint = (row: RiskRow | undefined): string | undefined => {
