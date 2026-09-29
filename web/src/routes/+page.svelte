@@ -105,19 +105,22 @@
       : `${seriesCount(visible.length)} · captação com janela parcial em ${seriesCount(partialFlows)}`,
   );
 
-  const total = $derived(data.totals.find((row) => row.scope === scope));
+  const inScope = (row: { scope: string; structural: boolean }): boolean =>
+    row.scope === scope && row.structural === includeStructural;
+
+  const total = $derived(data.totals.find(inScope));
 
   const managerHint = $derived(
     total === undefined
       ? undefined
       : `${integer(total.classes)} ${total.classes === 1 ? "classe" : "classes"} · ${
           includeExclusive ? "inclusive exclusivas" : "não exclusivas"
-        }`,
+        } · ${includeStructural ? "com" : "sem"} veículos estruturais`,
   );
 
   const months = $derived.by(() => {
     const all = [
-      ...new Set(data.monthly.filter((row) => row.scope === scope).map((row) => row.month)),
+      ...new Set(data.monthly.filter(inScope).map((row) => row.month)),
     ].sort();
     return all.slice(-CHART_MONTHS);
   });
@@ -125,7 +128,7 @@
   const flowByMonth = $derived.by(() => {
     const table = new Map<string, number>();
     for (const row of data.monthly) {
-      if (row.scope !== scope || row.group_value === null) continue;
+      if (!inScope(row) || row.group_value === null) continue;
       table.set(`${row.month}|${row.group_value}`, row.net_flow);
     }
     return table;
@@ -153,9 +156,10 @@
   const flowNote = $derived(
     [
       includeExclusive
-        ? "Todas as séries da gestora, inclusive exclusivas."
-        : "Séries não exclusivas da gestora.",
-      "Não segue os filtros de público, classificação e veículos estruturais.",
+        ? "Todas as classes da gestora, inclusive exclusivas,"
+        : "Classes não exclusivas da gestora,",
+      includeStructural ? "com veículos estruturais." : "sem veículos estruturais.",
+      "Segue os interruptores de exclusivos e de veículos estruturais, não os filtros de público e classificação.",
       partialMonth && lastMonth !== undefined
         ? `${monthLabel(lastMonth)} parcial, até ${date(data.meta.as_of)}.`
         : null,
@@ -444,7 +448,12 @@
   </section>
 
   <section class="flex flex-col gap-2" aria-labelledby="visible-tiles-title">
-    <h2 id="visible-tiles-title" class="text-sm font-semibold">Dos fundos exibidos</h2>
+    <div class="flex flex-col gap-0.5">
+      <h2 id="visible-tiles-title" class="text-sm font-semibold">Dos fundos exibidos</h2>
+      <p class="text-base-content/70 text-xs">
+        Soma das séries da tabela abaixo: segue público, classificação e veículos estruturais.
+      </p>
+    </div>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <StatTile
         label="Patrimônio líquido"
@@ -463,7 +472,12 @@
 
   <section class="flex flex-col gap-2" aria-labelledby="manager-tiles-title">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 id="manager-tiles-title" class="text-sm font-semibold">Da gestora</h2>
+      <div class="flex flex-col gap-0.5">
+        <h2 id="manager-tiles-title" class="text-sm font-semibold">Da gestora</h2>
+        <p class="text-base-content/70 text-xs">
+          Todas as classes do escopo, de todos os públicos: segue só exclusivos e veículos estruturais.
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         {#if includeExclusive}
           <span class="text-base-content/70 text-xs">
