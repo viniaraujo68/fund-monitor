@@ -3,7 +3,9 @@ from datetime import date, timedelta
 
 import polars as pl
 
+from fund_monitor.calc.benchmarks import IBOVESPA, IMA_B
 from fund_monitor.calc.peers import PEER_WINDOW
+from fund_monitor.calc.risk import with_benchmark_returns
 from fund_monitor.calc.series import SERIES_KEY, series_id, split_dates, subclassed_cnpjs
 
 HIGH = "high"
@@ -21,6 +23,7 @@ ISSUE_SCHEMA = {
     "days": pl.Int64,
     "value": pl.Float64,
     "threshold": pl.Float64,
+    "deviation": pl.Float64,
     "detail": pl.String,
 }
 
@@ -29,6 +32,9 @@ JUMP_LOOKBACK = 60
 JUMP_SIGMAS = 5.0
 MATERIAL_DEVIATION = 0.001
 MARKET_JUMP_SHARE = 0.10
+MARKET_INDICES = (IBOVESPA, IMA_B)
+INDEX_MOVE_SIGMAS = 2.5
+MIN_INDEX_CORRELATION = 0.5
 FIXED_INCOME_JUMP = 0.03
 FIXED_INCOME = "Renda Fixa"
 REPEATED_QUOTA_DAYS = 3
@@ -50,6 +56,7 @@ class QualityInputs:
     windows: pl.DataFrame
     calendar: list[date]
     market_jump_share: pl.DataFrame
+    levels: pl.DataFrame
     source_dates: dict[str, date | None]
     as_of: date
     reference_date: date
@@ -115,18 +122,22 @@ def with_spanned_days(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFra
     )
 
 
+def daily_equivalent(column: str) -> pl.Expr:
+    return (1 + pl.col(column)) ** (1 / pl.col("spanned_days")) - 1
+
+
 def flag_jumps(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFrame:
     days = pl.col("spanned_days")
-    daily_equivalent = (1 + pl.col("daily_return")) ** (1 / days) - 1
     flagged = with_spanned_days(returns, calendar).with_columns(
-        daily_equivalent.rolling_mean(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_mean"),
-        daily_equivalent.rolling_std(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_std"),
+        daily_equivalent("daily_return").rolling_mean(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_mean"),
+        daily_equivalent("daily_return").rolling_std(JUMP_LOOKBACK).shift(1).over("series_id").alias("prior_std"),
     )
-    deviation = (pl.col("daily_return") - days * pl.col("prior_mean")).abs()
+    deviation = pl.col("daily_return") - days * pl.col("prior_mean")
     statistical_limit = JUMP_SIGMAS * pl.col("prior_std") * days.sqrt()
-    statistical = (deviation > statistical_limit) & (deviation >= MATERIAL_DEVIATION)
+    statistical = (deviation.abs() > statistical_limit) & (deviation.abs() >= MATERIAL_DEVIATION)
     absolute = (pl.col("cvm_classification") == FIXED_INCOME) & (pl.col("daily_return").abs() > FIXED_INCOME_JUMP)
     return flagged.with_columns(
+        deviation.alias("deviation"),
         statistical.fill_null(False).alias("statistical_jump"),
         absolute.fill_null(False).alias("absolute_jump"),
         pl.max_horizontal(statistical_limit, pl.lit(MATERIAL_DEVIATION)).alias("statistical_threshold"),
@@ -142,25 +153,82 @@ def market_jump_share(returns: pl.DataFrame, calendar: list[date]) -> pl.DataFra
     )
 
 
+def index_moves(levels: pl.DataFrame) -> pl.DataFrame:
+    moves = []
+    for index in MARKET_INDICES:
+        daily = pl.col("level") / pl.col("level").shift(1) - 1
+        prior_mean = daily.rolling_mean(JUMP_LOOKBACK).shift(1)
+        prior_std = daily.rolling_std(JUMP_LOOKBACK).shift(1)
+        moves.append(
+            levels.filter(pl.col("benchmark") == index)
+            .sort("date")
+            .select("date", pl.lit(index).alias("market_index"), ((daily - prior_mean) / prior_std).alias("index_move"))
+        )
+    return pl.concat(moves)
+
+
+def with_correlated_index(jumps: pl.DataFrame, levels: pl.DataFrame) -> pl.DataFrame:
+    frame = with_benchmark_returns(jumps, levels)
+    correlations = [
+        pl.rolling_corr(daily_equivalent("daily_return"), daily_equivalent(f"{index}_daily_return"), window_size=JUMP_LOOKBACK)
+        .shift(1)
+        .over("series_id")
+        .alias(index)
+        for index in MARKET_INDICES
+    ]
+    return (
+        frame.with_columns(pl.struct(correlations).alias("correlations"))
+        .with_columns(
+            pl.concat_list(pl.col("correlations").struct.field(index).abs().fill_null(0) for index in MARKET_INDICES)
+            .list.arg_max()
+            .replace_strict(dict(enumerate(MARKET_INDICES)), return_dtype=pl.String)
+            .alias("market_index")
+        )
+        .with_columns(
+            pl.coalesce(
+                pl.when(pl.col("market_index") == index).then(pl.col("correlations").struct.field(index)) for index in MARKET_INDICES
+            ).alias("index_correlation")
+        )
+        .join(index_moves(levels), on=["date", "market_index"], how="left")
+    )
+
+
+def index_market_day() -> pl.Expr:
+    correlated = pl.col("index_correlation").abs() >= MIN_INDEX_CORRELATION
+    unusual = pl.col("index_move").abs() > INDEX_MOVE_SIGMAS
+    same_direction = (pl.col("index_move") * pl.col("index_correlation")).sign() == pl.col("deviation").sign()
+    return (correlated & unusual & same_direction).fill_null(False)
+
+
 def quota_jumps(inputs: QualityInputs) -> pl.DataFrame:
     classification = inputs.monitored.with_columns(series_id()).select("series_id", "cvm_classification")
+    flagged = flag_jumps(inputs.returns.join(classification, on="series_id", how="left"), inputs.calendar)
     jumps = (
-        flag_jumps(inputs.returns.join(classification, on="series_id", how="left"), inputs.calendar)
+        with_correlated_index(flagged, inputs.levels)
         .filter(pl.col("statistical_jump") | pl.col("absolute_jump"))
         .join(inputs.market_jump_share, on=["date", "cvm_classification"], how="left")
     )
-    market_day = pl.col("market_share").fill_null(0) >= MARKET_JUMP_SHARE
+    peers_moved = pl.col("market_share").fill_null(0) >= MARKET_JUMP_SHARE
+    index_moved = index_market_day()
     kind = pl.when(pl.col("absolute_jump")).then(pl.lit("absolute")).otherwise(pl.lit("statistical"))
+    reason = (
+        pl.when(index_moved)
+        .then(pl.concat_str(pl.lit("; index "), pl.col("market_index")))
+        .when(peers_moved)
+        .then(pl.lit("; market-wide"))
+        .otherwise(pl.lit(""))
+    )
     threshold = pl.when(pl.col("absolute_jump")).then(pl.lit(FIXED_INCOME_JUMP)).otherwise(pl.col("statistical_threshold"))
     return issues(
         jumps,
         "quota_jump",
-        pl.when(market_day).then(pl.lit(INFO)).otherwise(pl.lit(MEDIUM)),
+        pl.when(index_moved | peers_moved).then(pl.lit(INFO)).otherwise(pl.lit(MEDIUM)),
         series_id=pl.col("series_id"),
         date=pl.col("date"),
         value=pl.col("daily_return"),
         threshold=threshold,
-        detail=pl.concat_str(kind, pl.when(market_day).then(pl.lit("; market-wide")).otherwise(pl.lit(""))),
+        deviation=pl.col("deviation"),
+        detail=pl.concat_str(kind, reason),
     )
 
 

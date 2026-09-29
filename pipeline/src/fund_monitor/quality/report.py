@@ -4,6 +4,7 @@ from datetime import date
 import polars as pl
 
 from fund_monitor import config
+from fund_monitor.calc.benchmarks import read_benchmark_levels
 from fund_monitor.calc.returns import daily_returns
 from fund_monitor.calc.series import complete_as_of, deduplicate_reports, load_daily, quota_series, series_id
 from fund_monitor.quality.checks import QualityInputs, checked_days, market_jump_share, run_checks
@@ -56,6 +57,7 @@ def build_inputs(registry: pl.DataFrame, reference_date: date) -> QualityInputs:
         windows=pl.read_parquet(config.METRICS_DIR / "window_returns.parquet"),
         calendar=calendar,
         market_jump_share=peer_market_jumps(registry, calendar),
+        levels=read_benchmark_levels(),
         source_dates=source_dates(),
         as_of=as_of,
         reference_date=reference_date,

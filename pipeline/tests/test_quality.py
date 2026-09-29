@@ -9,6 +9,7 @@ import pytest
 
 from builders import SAMPLE_DAYS, SAMPLE_ZEROED_DAY, business_days, compound, install_sources, sample_sources
 from fund_monitor import config
+from fund_monitor.calc.benchmarks import benchmark_levels
 from fund_monitor.calc.engine import calculate, write_metrics
 from fund_monitor.calc.returns import daily_returns
 from fund_monitor.calc.series import quota_series
@@ -75,11 +76,23 @@ def base_inputs(**overrides) -> QualityInputs:
         market_jump_share=pl.DataFrame(
             schema={"date": pl.Date, "cvm_classification": pl.String, "market_share": pl.Float64}
         ),
+        levels=index_levels(DAYS, [1.0] * len(DAYS), [1.0] * len(DAYS)),
         source_dates={"cvm_daily": date(2026, 9, 24), "cdi": date(2026, 9, 25), "ima_b": date(2026, 9, 25), "ibov": date(2026, 9, 25), "ibrx": date(2026, 9, 25)},
         as_of=DAYS[-1],
         reference_date=date(2026, 9, 26),
     )
     return replace(defaults, **overrides)
+
+
+def index_levels(days: list[date], ibovespa: list[float], ima_b: list[float]) -> pl.DataFrame:
+    indices = pl.DataFrame(
+        {"index": "cdi", "date": days, "value": [Decimal("0.05")] * len(days), "unit": "percent_per_day"},
+        schema_overrides={"value": pl.Decimal(18, 8)},
+    )
+    ima = pl.DataFrame({"index": "IMA-B", "date": days, "value": ima_b})
+    ibov = pl.DataFrame({"index": "IBOV", "date": days, "value": ibovespa})
+    ibrx = pl.DataFrame(schema={"index": pl.String, "date": pl.Date, "value": pl.Float64})
+    return benchmark_levels(indices, ima, ibov, ibrx)
 
 
 def test_missing_reports_group_consecutive_days() -> None:
@@ -116,6 +129,47 @@ def test_isolated_material_jump_is_medium() -> None:
 def test_market_wide_jump_is_info() -> None:
     found = checks.quota_jumps(jump_inputs(-0.004, market_share=0.25))
     assert found.select("severity", "detail").rows() == [("info", "statistical; market-wide")]
+
+
+def test_jump_publishes_the_deviation_from_the_expected_return() -> None:
+    found = checks.quota_jumps(jump_inputs(-0.004))
+    assert found["deviation"].item() == pytest.approx(-0.004 - 0.0005, abs=1e-6)
+
+
+def equity_jump_inputs(fund_last: float, ibovespa_last: float, correlated: bool = True) -> QualityInputs:
+    days = business_days(date(2025, 11, 3), 72)
+    market = [0.01, -0.01, 0.005, -0.005] * 17 + [0.002, -0.002]
+    fund = [0.9 * r for r in market] if correlated else [0.004, 0.004, -0.004, -0.004] * 17 + [0.004, -0.004]
+    frame = quotas(days, compound(1.0, [*fund, fund_last]))
+    ibovespa = compound(100000.0, [*market, ibovespa_last])
+    monitored = pl.DataFrame({"cnpj": [CNPJ], "subclass_id": [None], "cvm_classification": ["Ações"]}, schema_overrides={"subclass_id": pl.String})
+    return base_inputs(
+        quotas=frame,
+        returns=daily_returns(frame),
+        calendar=days,
+        monitored=monitored,
+        levels=index_levels(days, ibovespa, [1000.0] * len(days)),
+    )
+
+
+def test_jump_on_a_day_the_correlated_index_moved_is_info() -> None:
+    found = checks.quota_jumps(equity_jump_inputs(-0.05, -0.05))
+    assert found.select("severity", "detail").rows() == [("info", "statistical; index ibov")]
+
+
+def test_index_moving_the_other_way_does_not_explain_the_jump() -> None:
+    found = checks.quota_jumps(equity_jump_inputs(-0.05, 0.05))
+    assert found.select("severity", "detail").rows() == [("medium", "statistical")]
+
+
+def test_index_move_does_not_explain_an_uncorrelated_fund() -> None:
+    found = checks.quota_jumps(equity_jump_inputs(-0.05, -0.05, correlated=False))
+    assert found.select("severity", "detail").rows() == [("medium", "statistical")]
+
+
+def test_ordinary_index_day_does_not_explain_the_jump() -> None:
+    found = checks.quota_jumps(equity_jump_inputs(-0.05, -0.012))
+    assert found.select("severity", "detail").rows() == [("medium", "statistical")]
 
 
 def test_immaterial_deviation_is_not_a_jump() -> None:
