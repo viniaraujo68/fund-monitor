@@ -197,7 +197,7 @@
             {/each}
           </ul>
           <p class="text-base-content/70 grow-0 text-xs">
-            Queda isolada: fora do padrão da própria série e não compartilhada pelo mercado.
+            Queda isolada: fora do padrão da própria série e não explicada pelo mercado.
             <a class="link" href={resolve("/qualidade")}>Ver qualidade</a>.
           </p>
         </div>
