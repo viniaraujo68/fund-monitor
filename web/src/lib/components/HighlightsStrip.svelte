@@ -232,7 +232,7 @@
             Fundos incentivados pagam rendimentos que o informe parece registrar como resgate,
             leitura ainda a confirmar. A cota não é ajustada por esse evento, então o retorno pela
             cota subestima o que o cotista recebeu e a posição entre pares fica distorcida.
-            <a class="link" href={resolve("/metodologia")}>Ver metodologia</a>.
+            <a class="link" href={resolve("/como-funciona")}>Ver como funciona</a>.
           </p>
           <div class="overflow-x-auto">
             <table class="table-sm table">

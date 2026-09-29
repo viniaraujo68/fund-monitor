@@ -5,7 +5,7 @@ export const routes: RoutingConfig<RouteId> = {
   meta: {
     "/": { title: "Visão geral", icon: "overview" },
     "/qualidade": { title: "Qualidade", icon: "shield" },
-    "/metodologia": { title: "Metodologia", icon: "book" },
+    "/como-funciona": { title: "Como funciona", icon: "book" },
     "/fundo/[id]": { title: "Fundo" },
   },
 
