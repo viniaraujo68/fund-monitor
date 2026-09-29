@@ -12,6 +12,15 @@ NORMAL_STATUS = "Em Funcionamento Normal"
 FIF_CLASS_TYPE = "Classes de Cotas de Fundos FIF"
 GENERAL_PUBLIC = "Público Geral"
 REPORTED_COLUMN = "subclass_reported"
+STRUCTURAL_MARKERS = ("VEÍCULO ESPECIAL", "FIFE")
+
+
+def is_structural_vehicle(class_name: str) -> bool:
+    return any(marker in class_name for marker in STRUCTURAL_MARKERS)
+
+
+def is_structural() -> pl.Expr:
+    return pl.col("class_name").map_elements(is_structural_vehicle, return_dtype=pl.Boolean)
 
 
 def is_active_class() -> pl.Expr:

@@ -1,5 +1,7 @@
 import re
 
+from fund_monitor.universe import is_structural_vehicle
+
 MANAGER_PREFIXES = ("SUBCLASSE ", "ICATU VANGUARDA ", "ICATU VANG ")
 LEGAL_MARKERS = (
     " FIF",
@@ -15,7 +17,6 @@ LEGAL_MARKERS = (
 LOWERCASE_WORDS = {"DE", "DA", "DO", "DOS", "DAS", "EM", "E", "NO", "NA", "AO", "AOS", "À", "ÀS", "COM", "POR", "PARA", "SEM"}
 KEPT_UPPERCASE = {"IPCA", "IBOV", "FIFE"}
 CAPITALIZED_WORDS = {"LOW"}
-STRUCTURAL_MARKERS = ("VEÍCULO ESPECIAL", "FIFE")
 QUALIFIERS = (
     ("FIFE", (" FIFE",)),
     ("FIC", (" EM COTAS", " FIC", " CIC")),
@@ -55,10 +56,6 @@ def display_name(class_name: str, subclass_name: str | None) -> str:
     source = subclass_name or class_name
     short = " ".join(cut_legal_suffix(strip_prefixes(source)).split())
     return " ".join(format_word(word, position == 0) for position, word in enumerate(short.split()))
-
-
-def is_structural_vehicle(class_name: str) -> bool:
-    return any(marker in class_name for marker in STRUCTURAL_MARKERS)
 
 
 def qualifier(full_name: str, base: str) -> str | None:

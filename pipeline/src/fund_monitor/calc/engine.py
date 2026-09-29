@@ -19,7 +19,7 @@ from fund_monitor.calc.series import (
     series_id,
     valid_reports,
 )
-from fund_monitor.universe import select_manager_series, select_monitored_series, select_peer_universe
+from fund_monitor.universe import is_structural, select_manager_series, select_monitored_series, select_peer_universe
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +31,20 @@ AGGREGATE_SCOPES = {"monitored": select_monitored_series, "manager": select_mana
 def aggregates(daily: pl.DataFrame, registry: pl.DataFrame, as_of: date) -> tuple[pl.DataFrame, pl.DataFrame]:
     monthly, totals = [], []
     for scope, select in AGGREGATE_SCOPES.items():
-        series = select(registry, config.MANAGER_CNPJ)
-        rows = aggregate_rows(daily, series)
-        attributes = series.select("cnpj", *AGGREGATE_GROUPS).unique()
-        totals.append({"scope": scope, "as_of": as_of, **aggregate_totals(rows, as_of)})
-        for group in AGGREGATE_GROUPS:
-            monthly.append(
-                aggregate_monthly(rows, attributes, group)
-                .rename({group: "group_value"})
-                .with_columns(scope=pl.lit(scope), group=pl.lit(group))
-            )
-    columns = ["scope", "group", "group_value", "month", "net_flow", "net_assets_end", "classes"]
+        for structural in (True, False):
+            series = select(registry, config.MANAGER_CNPJ)
+            if not structural:
+                series = series.filter(is_structural().not_())
+            rows = aggregate_rows(daily, series)
+            attributes = series.select("cnpj", *AGGREGATE_GROUPS).unique()
+            totals.append({"scope": scope, "structural": structural, "as_of": as_of, **aggregate_totals(rows, as_of)})
+            for group in AGGREGATE_GROUPS:
+                monthly.append(
+                    aggregate_monthly(rows, attributes, group)
+                    .rename({group: "group_value"})
+                    .with_columns(scope=pl.lit(scope), structural=pl.lit(structural), group=pl.lit(group))
+                )
+    columns = ["scope", "structural", "group", "group_value", "month", "net_flow", "net_assets_end", "classes"]
     return pl.concat(monthly).select(columns), pl.DataFrame(totals)
 
 

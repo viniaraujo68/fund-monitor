@@ -189,6 +189,7 @@ export interface FundDetail {
 
 export interface AggregateRow {
   scope: string;
+  structural: boolean;
   group: string;
   group_value: string | null;
   month: IsoDate;
@@ -199,6 +200,7 @@ export interface AggregateRow {
 
 export interface AggregateTotal {
   scope: string;
+  structural: boolean;
   as_of: IsoDate;
   net_assets: number;
   net_flow_12m: number;

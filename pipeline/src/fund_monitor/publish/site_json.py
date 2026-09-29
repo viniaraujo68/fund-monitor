@@ -13,11 +13,11 @@ from fund_monitor.calc.benchmarks import BENCHMARKS_BY_CLASSIFICATION, CDI, IBRX
 from fund_monitor.calc.peers import MIN_PEERS, PEER_METRICS
 from fund_monitor.calc.returns import MONTHLY_WINDOWS, SINCE_START
 from fund_monitor.calc.series import series_id
-from fund_monitor.publish.names import is_structural_vehicle, unique_display_names
+from fund_monitor.publish.names import unique_display_names
 from fund_monitor.quality.checks import SEVERITIES
 from fund_monitor.quality.report import COVERAGE_METRIC, ISSUES_METRIC, SOURCES_METRIC
 from fund_monitor.quality.triage import OPEN, OPEN_SEVERITIES, STATUSES, apply_triage, is_open, load_triage
-from fund_monitor.universe import GENERAL_PUBLIC, select_manager_series, select_monitored_series, select_peer_universe
+from fund_monitor.universe import GENERAL_PUBLIC, is_structural, select_manager_series, select_monitored_series, select_peer_universe
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +235,7 @@ class FundDetail(Contract):
 
 class AggregateRow(Contract):
     scope: str
+    structural: bool
     group: str
     group_value: str | None
     month: date
@@ -245,6 +246,7 @@ class AggregateRow(Contract):
 
 class AggregateTotal(Contract):
     scope: str
+    structural: bool
     as_of: date
     net_assets: float
     net_flow_12m: float
@@ -277,7 +279,7 @@ def fund_attributes(registry: pl.DataFrame) -> pl.DataFrame:
     names = unique_display_names(monitored.select("class_name", "subclass_name").rows())
     return monitored.with_columns(
         pl.Series("display_name", names),
-        pl.col("class_name").map_elements(is_structural_vehicle, return_dtype=pl.Boolean).alias("structural_vehicle"),
+        is_structural().alias("structural_vehicle"),
     )
 
 
