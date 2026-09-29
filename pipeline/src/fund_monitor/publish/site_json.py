@@ -14,7 +14,7 @@ from fund_monitor.calc.peers import MIN_PEERS, PEER_METRICS
 from fund_monitor.calc.returns import MONTHLY_WINDOWS, SINCE_START
 from fund_monitor.calc.series import series_id
 from fund_monitor.publish.names import unique_display_names
-from fund_monitor.quality.checks import SEVERITIES
+from fund_monitor.quality.checks import INFO, SEVERITIES
 from fund_monitor.quality.report import COVERAGE_METRIC, ISSUES_METRIC, SOURCES_METRIC
 from fund_monitor.quality.triage import OPEN, OPEN_SEVERITIES, STATUSES, apply_triage, is_open, load_triage
 from fund_monitor.universe import GENERAL_PUBLIC, is_structural, select_manager_series, select_monitored_series, select_peer_universe
@@ -491,7 +491,14 @@ def build_issues(issues: pl.DataFrame, names: dict[str, str]) -> list[Issue]:
 
 
 def build_events(issues: pl.DataFrame, names: dict[str, str]) -> list[QualityEvent]:
-    common_status = pl.when(pl.col("status").n_unique() == 1).then(pl.col("status").first()).otherwise(pl.lit(OPEN))
+    reviewed = pl.col("status").filter(pl.col("severity") != INFO)
+    common_status = (
+        pl.when(reviewed.n_unique() == 1)
+        .then(reviewed.first())
+        .when((reviewed.len() == 0) & (pl.col("status").n_unique() == 1))
+        .then(pl.col("status").first())
+        .otherwise(pl.lit(OPEN))
+    )
     common_note = pl.when(pl.col("note").n_unique() == 1).then(pl.col("note").first())
     events = (
         issues.filter(pl.col("rule") == EVENT_RULE, pl.col("series_id").is_not_null(), pl.col("date").is_not_null())

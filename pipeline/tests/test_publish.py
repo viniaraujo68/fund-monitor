@@ -307,6 +307,18 @@ def test_events_group_jumps_of_at_least_three_series() -> None:
     assert event.cnpj_count == 2
 
 
+def test_event_status_ignores_info_jumps() -> None:
+    issues = jump_issues(
+        [
+            ("A", EVENT_DAY, "info", "open", None),
+            ("B", EVENT_DAY, "info", "open", None),
+            ("C", EVENT_DAY, "medium", "explained", "Mercado global."),
+        ]
+    )
+    (event,) = site_json.build_events(issues, {})
+    assert (event.severity, event.status, event.note) == ("medium", "explained", None)
+
+
 def test_event_with_mixed_status_stays_open_and_events_are_newest_first() -> None:
     issues = jump_issues(
         [
