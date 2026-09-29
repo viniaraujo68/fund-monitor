@@ -8,7 +8,6 @@ const config = {
     paths: { base: process.env.BASE_PATH ?? "", relative: false },
     alias: {
       $data: "../data/site",
-      $docs: "../docs",
     },
   },
 };
