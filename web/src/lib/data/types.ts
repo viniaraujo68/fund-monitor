@@ -81,6 +81,7 @@ export interface FundSummary {
   sharpe_12m: number | null;
   peer_count: number;
   peer_return_percentile_12m: number | null;
+  peer_volatility_percentile_12m: number | null;
   issues: IssueCounts;
   open_issues: IssueCounts;
 }

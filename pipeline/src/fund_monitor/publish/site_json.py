@@ -118,6 +118,7 @@ class FundSummary(Contract):
     sharpe_12m: float | None
     peer_count: int
     peer_return_percentile_12m: float | None
+    peer_volatility_percentile_12m: float | None
     issues: IssueCounts
     open_issues: IssueCounts
 
@@ -358,6 +359,7 @@ def build_summary(
         sharpe_12m=window_value(risk, "12m", "sharpe", RATIO_DIGITS),
         peer_count=position["peer_count"] if position else 0,
         peer_return_percentile_12m=rounded(position["fund_return_percentile"], RATIO_DIGITS) if position else None,
+        peer_volatility_percentile_12m=rounded(position["volatility_percentile"], RATIO_DIGITS) if position else None,
         issues=issue_counts(issues),
         open_issues=open_issue_counts(issues),
     )

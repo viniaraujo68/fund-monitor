@@ -219,6 +219,9 @@ def test_published_site_matches_contract(published_site: Path) -> None:
     detail = site_json.FundDetail.model_validate_json((published_site / site_json.FUNDS_DIRECTORY / "A.json").read_text())
     assert detail.peers is not None
     assert detail.peers.peer_count == 6
+    assert detail.summary.peer_return_percentile_12m == detail.peers.metrics["fund_return"].percentile
+    assert detail.summary.peer_volatility_percentile_12m == detail.peers.metrics["volatility"].percentile
+    assert detail.summary.peer_volatility_percentile_12m is not None
     assert detail.summary.issues.high == 1
     assert detail.summary.open_issues.high == 0
     (zeroed,) = [issue for issue in detail.issues if issue.rule == "zero_values"]
