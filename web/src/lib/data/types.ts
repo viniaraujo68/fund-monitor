@@ -60,6 +60,7 @@ export interface FundSummary {
   structural_vehicle: boolean;
   benchmarks: string[];
   market_benchmark: string | null;
+  primary_benchmark: string;
   first_date: IsoDate | null;
   last_date: IsoDate | null;
   inherited_until: IsoDate | null;
@@ -73,6 +74,8 @@ export interface FundSummary {
   return_24m: number | null;
   cdi_12m: number | null;
   pct_cdi_12m: number | null;
+  primary_benchmark_12m: number | null;
+  excess_primary_12m: number | null;
   volatility_12m: number | null;
   max_drawdown_12m: number | null;
   sharpe_12m: number | null;
@@ -93,6 +96,7 @@ export interface WindowRow {
   cdi_annualized: number | null;
   pct_cdi: number | null;
   benchmark_returns: Record<string, number | null>;
+  excess_returns: Record<string, number | null>;
 }
 
 export interface RiskRow {

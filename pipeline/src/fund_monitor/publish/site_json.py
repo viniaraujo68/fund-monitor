@@ -97,6 +97,7 @@ class FundSummary(Contract):
     structural_vehicle: bool
     benchmarks: list[str]
     market_benchmark: str | None
+    primary_benchmark: str
     first_date: date | None
     last_date: date | None
     inherited_until: date | None
@@ -110,6 +111,8 @@ class FundSummary(Contract):
     return_24m: float | None
     cdi_12m: float | None
     pct_cdi_12m: float | None
+    primary_benchmark_12m: float | None
+    excess_primary_12m: float | None
     volatility_12m: float | None
     max_drawdown_12m: float | None
     sharpe_12m: float | None
@@ -130,6 +133,7 @@ class WindowRow(Contract):
     cdi_annualized: float | None
     pct_cdi: float | None
     benchmark_returns: dict[str, float | None]
+    excess_returns: dict[str, float | None]
 
 
 class RiskRow(Contract):
@@ -316,6 +320,7 @@ def build_summary(
 ) -> FundSummary:
     classification = attributes["cvm_classification"]
     benchmarks, market_benchmark = series_benchmarks(classification, attributes["performance_benchmark"])
+    primary_benchmark = market_benchmark or CDI
     since_start = windows.filter(pl.col("window") == SINCE_START)
     return FundSummary(
         series_id=attributes["series_id"],
@@ -332,6 +337,7 @@ def build_summary(
         structural_vehicle=attributes["structural_vehicle"],
         benchmarks=benchmarks,
         market_benchmark=market_benchmark,
+        primary_benchmark=primary_benchmark,
         first_date=since_start["first_date"].item() if since_start.height else None,
         last_date=since_start["last_date"].item() if since_start.height else None,
         inherited_until=since_start["inherited_until"].item() if since_start.height else None,
@@ -345,6 +351,8 @@ def build_summary(
         return_24m=window_value(windows, "24m", "fund_return"),
         cdi_12m=window_value(windows, "12m", "cdi_return"),
         pct_cdi_12m=window_value(windows, "12m", "pct_cdi", RATIO_DIGITS),
+        primary_benchmark_12m=window_value(windows, "12m", f"{primary_benchmark}_return"),
+        excess_primary_12m=window_value(windows, "12m", f"excess_{primary_benchmark}"),
         volatility_12m=window_value(risk, "12m", "volatility"),
         max_drawdown_12m=window_value(risk, "12m", "max_drawdown"),
         sharpe_12m=window_value(risk, "12m", "sharpe", RATIO_DIGITS),
@@ -370,6 +378,7 @@ def build_windows(windows: pl.DataFrame, benchmarks: list[str]) -> list[WindowRo
             cdi_annualized=rounded(row["cdi_annualized"], RETURN_DIGITS),
             pct_cdi=rounded(row["pct_cdi"], RATIO_DIGITS),
             benchmark_returns={b: rounded(row[f"{b}_return"], RETURN_DIGITS) for b in market},
+            excess_returns={b: rounded(row[f"excess_{b}"], RETURN_DIGITS) for b in benchmarks},
         )
         for window in WINDOWS
         if (row := rows.get(window)) is not None

@@ -128,6 +128,31 @@ def test_inherited_until_comes_from_the_whole_series() -> None:
     assert summary.first_date == days[0]
 
 
+def equity_summary(performance_benchmark: str) -> site_json.FundSummary:
+    days = business_days(date(2024, 9, 2), 600)
+    quotas = quotas_frame("A-S1", days, compound(1.0, [0.0008] * 599))
+    windows = window_returns(quotas, levels_frame(days, 0.05, ima_b=[1000.0 + p for p in range(600)]), as_of=days[-1])
+    risk = pl.DataFrame(schema={"window": pl.String, "volatility": pl.Float64, "max_drawdown": pl.Float64, "sharpe": pl.Float64})
+    attribute = {**fund_attribute(), "performance_benchmark": performance_benchmark}
+    return site_json.build_summary(attribute, windows, risk, None, None, apply_triage(pl.DataFrame(schema=ISSUE_SCHEMA), []))
+
+
+def test_primary_benchmark_is_the_market_benchmark_or_the_cdi() -> None:
+    di = equity_summary("DI de um dia")
+    assert di.primary_benchmark == "cdi"
+    assert di.excess_primary_12m == pytest.approx(di.return_12m - di.cdi_12m, abs=2e-6)
+    inflation = equity_summary("IPCA")
+    assert inflation.primary_benchmark == "ima_b"
+    assert inflation.excess_primary_12m == pytest.approx(inflation.return_12m - inflation.primary_benchmark_12m, abs=2e-6)
+    assert inflation.primary_benchmark_12m is not None
+
+
+def test_windows_publish_the_excess_over_each_benchmark() -> None:
+    (row,) = site_json.build_windows(twelve_month_windows(300), ["cdi", "ima_b"])
+    assert set(row.excess_returns) == {"cdi", "ima_b"}
+    assert row.excess_returns["ima_b"] == pytest.approx(row.fund_return - row.benchmark_returns["ima_b"], abs=1e-6)
+
+
 def test_monthly_residual_keeps_the_precision_of_the_rule() -> None:
     flows = pl.DataFrame(
         {
