@@ -109,28 +109,6 @@ def window_returns(quotas: pl.DataFrame, levels: pl.DataFrame, as_of: date) -> p
     )
 
 
-def rolling_12m_returns(quotas: pl.DataFrame, levels: pl.DataFrame) -> pl.DataFrame:
-    spans = quotas.group_by("series_id").agg(pl.col("date").min().alias("first_date"))
-    month_ends = (
-        quotas.group_by("series_id", pl.col("date").dt.truncate("1mo").alias("month"))
-        .agg(pl.col("date").max().alias("end_date"), pl.col("quota_value").sort_by("date").last().cast(pl.Float64).alias("end_quota"))
-        .join(spans, on="series_id")
-        .with_columns(anchor_date=pl.col("end_date").dt.offset_by("-12mo"))
-        .filter(pl.col("first_date") <= pl.col("anchor_date"))
-    )
-    frame = attach_quota(month_ends, quotas, "anchor_date", "base")
-    frame = attach_level(frame, levels, CDI, "base_date", "cdi_base")
-    frame = attach_level(frame, levels, CDI, "end_date", "cdi_end")
-    return frame.select(
-        "series_id",
-        "month",
-        "base_date",
-        "end_date",
-        (pl.col("end_quota") / pl.col("base_quota") - 1).alias("fund_return"),
-        (pl.col("cdi_end") / pl.col("cdi_base") - 1).alias("cdi_return"),
-    ).sort("series_id", "month")
-
-
 def cumulative_index(quotas: pl.DataFrame, levels: pl.DataFrame, start: date) -> pl.DataFrame:
     anchors = quotas.group_by("series_id").agg(pl.col("date").min().alias("first_date")).with_columns(
         anchor_date=pl.max_horizontal(pl.col("first_date"), pl.lit(start))

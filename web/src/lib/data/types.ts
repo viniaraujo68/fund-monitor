@@ -123,13 +123,6 @@ export interface Series {
   values: Record<string, (number | null)[]>;
 }
 
-export interface RollingRow {
-  month: IsoDate;
-  end_date: IsoDate;
-  fund_return: number | null;
-  cdi_return: number | null;
-}
-
 export interface FlowRow {
   month: IsoDate;
   net_flow: number | null;
@@ -181,7 +174,6 @@ export interface FundDetail {
   risk: RiskRow[];
   cumulative: Series;
   drawdown: Series;
-  rolling_12m: RollingRow[];
   monthly_flows: FlowRow[];
   peers: PeerPosition | null;
   issues: Issue[];

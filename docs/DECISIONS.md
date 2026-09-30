@@ -215,7 +215,7 @@ Se a série começou depois da âncora, a janela fica vazia ("sem histórico"). 
 
 **Excesso de retorno.** `R_fundo − R_benchmark`, diferença simples dos acumulados no período, em pontos percentuais. É calculado contra CDI, IMA-B, Ibovespa e IBrX-100. O site mostra o excesso sobre o **benchmark principal** da série (4.5) na tabela de fundos e no tile de retorno, e, na tabela de janelas, o excesso sobre o CDI e sobre o benchmark de mercado.
 
-**Janela móvel de 12 meses.** É calculada e publicada no JSON (`rolling_12m`), mas o gráfico ficou fora desta versão (corte de 28/09/2026).
+**Janela móvel de 12 meses.** Ficou fora desta versão (corte de 28/09/2026): nenhuma tela a usava, e em 29/09/2026 ela deixou de ser calculada e publicada.
 
 ### 4.3 Risco
 

@@ -10,7 +10,6 @@ from fund_monitor.calc.peers import peer_table
 from fund_monitor.calc.returns import (
     cumulative_index,
     daily_returns,
-    rolling_12m_returns,
     subtract_months,
     window_returns,
 )
@@ -71,17 +70,6 @@ def test_twelve_month_window_annualizes_over_business_days() -> None:
     assert row["fund_annualized"] == pytest.approx(1.0006**252 - 1)
     assert row["cdi_annualized"] == pytest.approx(1.0005**252 - 1)
     assert row["pct_cdi"] == pytest.approx((1.0006**steps - 1) / (1.0005**steps - 1))
-
-
-def test_rolling_twelve_months_uses_quota_a_year_before() -> None:
-    days = business_days(date(2025, 1, 2), 300)
-    quotas = compound(1.0, [0.0006] * 299)
-    rolling = rolling_12m_returns(quotas_frame("B", days, quotas), levels_frame(days, CDI_DAILY))
-    last = rolling.row(-1, named=True)
-    assert (last["base_date"], last["end_date"]) == (date(2025, 2, 25), date(2026, 2, 25))
-    steps = days.index(date(2026, 2, 25)) - days.index(date(2025, 2, 25))
-    assert last["fund_return"] == pytest.approx(1.0006**steps - 1)
-    assert last["cdi_return"] == pytest.approx(1.0005**steps - 1)
 
 
 def test_subtract_months_clamps_to_month_end() -> None:

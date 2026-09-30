@@ -160,13 +160,6 @@ class Series(Contract):
     values: dict[str, list[float | None]]
 
 
-class RollingRow(Contract):
-    month: date
-    end_date: date
-    fund_return: float | None
-    cdi_return: float | None
-
-
 class FlowRow(Contract):
     month: date
     net_flow: float | None
@@ -227,7 +220,6 @@ class FundDetail(Contract):
     risk: list[RiskRow]
     cumulative: Series
     drawdown: Series
-    rolling_12m: list[RollingRow]
     monthly_flows: list[FlowRow]
     peers: PeerPosition | None
     issues: list[Issue]
@@ -420,18 +412,6 @@ def build_series(frame: pl.DataFrame, columns: dict[str, str], digits: int) -> S
     )
 
 
-def build_rolling(rolling: pl.DataFrame) -> list[RollingRow]:
-    return [
-        RollingRow(
-            month=row["month"],
-            end_date=row["end_date"],
-            fund_return=rounded(row["fund_return"], RETURN_DIGITS),
-            cdi_return=rounded(row["cdi_return"], RETURN_DIGITS),
-        )
-        for row in rolling.sort("month").iter_rows(named=True)
-    ]
-
-
 def build_flows(flows: pl.DataFrame) -> list[FlowRow]:
     return [
         FlowRow(
@@ -585,7 +565,6 @@ def publish_site(registry: pl.DataFrame, reference_date: date) -> None:
     risks = by_series(metrics["risk"])
     cumulative = by_series(metrics["cumulative_index"])
     drawdowns = by_series(metrics["drawdown"])
-    rolling = by_series(metrics["rolling_12m"])
     monthly = by_series(metrics["monthly_flows"])
     flows = {row["series_id"]: row for row in metrics["flow_summary"].iter_rows(named=True)}
     positions = {row["series_id"]: row for row in metrics["peer_positions"].iter_rows(named=True)}
@@ -611,7 +590,6 @@ def publish_site(registry: pl.DataFrame, reference_date: date) -> None:
                 fund_cumulative, {"fund": "fund_index", **{b: f"{b}_index" for b in benchmarks}}, INDEX_DIGITS
             ),
             drawdown=build_series(drawdowns.get(key, empty["drawdown"]), {"fund": "drawdown"}, RETURN_DIGITS),
-            rolling_12m=build_rolling(rolling.get(key, empty["rolling_12m"])),
             monthly_flows=build_flows(monthly.get(key, empty["monthly_flows"])),
             peers=build_peer_position(positions.get(key)),
             issues=build_issues(fund_issues, names),

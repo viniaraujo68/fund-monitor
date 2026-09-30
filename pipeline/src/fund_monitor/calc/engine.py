@@ -7,7 +7,7 @@ from fund_monitor import config
 from fund_monitor.calc.benchmarks import read_benchmark_levels
 from fund_monitor.calc.flows import aggregate_monthly, aggregate_totals, flow_summary, monthly_flows
 from fund_monitor.calc.peers import GROUP_KEY, PEER_WINDOW, peer_positions, peer_table
-from fund_monitor.calc.returns import cumulative_index, rolling_12m_returns, subtract_months, window_returns
+from fund_monitor.calc.returns import cumulative_index, subtract_months, window_returns
 from fund_monitor.calc.risk import drawdown_series, risk_metrics
 from fund_monitor.calc.series import (
     aggregate_rows,
@@ -73,7 +73,6 @@ def calculate(registry: pl.DataFrame) -> dict[str, pl.DataFrame]:
         "risk": risk,
         "peers": peers,
         "peer_positions": peer_positions(peer_subjects(monitored, windows, risk), peers),
-        "rolling_12m": rolling_12m_returns(quotas, levels),
         "cumulative_index": cumulative,
         "drawdown": drawdown_series(cumulative),
         "monthly_flows": monthly_flows(flow_rows, quotas),
