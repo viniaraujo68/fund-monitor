@@ -593,7 +593,7 @@
       <h2 id="funds-table-title" class="text-base font-semibold">Fundos</h2>
       <p class="text-base-content/70 text-xs">
         Janela de 12 meses até {date(data.meta.as_of)}. vs benchmark: retorno menos o benchmark principal
-        da série (CDI para DI e multimercado, IMA-B para renda fixa, Ibovespa ou IBrX-100 para ações). Pares:
+        da série (o índice que a série declara, quando o monitor o coleta; se não, CDI para DI e multimercado, IMA-B para renda fixa e Ibovespa para ações). Pares:
         percentil do retorno e da volatilidade 12m e número de pares de Público Geral da mesma classificação
         ANBIMA, com pelo menos {MIN_PEERS} pares; os outros públicos não têm pares. * captação com janela parcial.
       </p>

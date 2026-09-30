@@ -86,7 +86,8 @@
               {seriesCount(benchmark.measured)} bateram o benchmark
             </p>
             <p class="text-base-content/70 text-xs">
-              CDI para DI e multimercado, IMA-B para renda fixa, Ibovespa ou IBrX-100 para ações.
+              O índice que a série declara, quando o monitor o coleta; se não, CDI para DI e multimercado,
+              IMA-B para renda fixa e Ibovespa para ações.
             </p>
           </div>
           {#if benchmark.leaders.length > 0}

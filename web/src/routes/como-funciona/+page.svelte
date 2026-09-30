@@ -29,12 +29,12 @@
     { name: "CVM, cadastro", use: "Quem é da gestora, classificação, público, benchmark declarado" },
     { name: "CVM, informe diário", use: "Cota, PL, captação, resgate e cotistas de todos os fundos do país" },
     { name: "Bacen, CDI", use: "Benchmark e taxa livre de risco" },
-    { name: "ANBIMA, IMA-B", use: "Benchmark da renda fixa que não é DI" },
+    { name: "ANBIMA, IMA-B, IMA-B 5, IMA-B 5+ e IRF-M", use: "Benchmark da renda fixa que não é DI" },
     { name: "B3, Ibovespa e IBrX-100", use: "Benchmark das ações" },
   ];
 
   const STEPS = [
-    { label: "Entrada", name: "Fontes", detail: "CVM cadastro e informe · Bacen CDI · ANBIMA IMA-B · B3 Ibovespa e IBrX-100" },
+    { label: "Entrada", name: "Fontes", detail: "CVM cadastro e informe · Bacen CDI · ANBIMA IMA-B, IMA-B 5, IMA-B 5+ e IRF-M · B3 Ibovespa e IBrX-100" },
     { label: "Etapa 1", name: "Coleta", detail: "Baixa as cinco fontes e confere cada resposta antes de gravar" },
     { label: "Etapa 2", name: "Cálculo", detail: "Retorno, risco, captação e pares, por série de cota" },
     { label: "Etapa 3", name: "Qualidade", detail: "Nove regras marcam o dado suspeito, sem apagar nada" },
@@ -47,7 +47,7 @@
     { name: "Volatilidade", formula: "desvio-padrão dos retornos diários × √252", note: "Quanto o fundo oscila num ano. Pede pelo menos 60 dias." },
     { name: "Drawdown", formula: "cota ÷ maior cota até ali − 1", note: "A maior queda desde um pico, com as datas do pico, do vale e da volta." },
     { name: "Sharpe", formula: "(retorno − CDI) ÷ volatilidade, anualizados", note: "CDI como taxa livre de risco. Some no fundo DI: com oscilação perto de zero, a razão vira ruído." },
-    { name: "Benchmark próprio", formula: "CDI · IMA-B · Ibovespa · IBrX-100", note: "CDI para DI e multimercado, IMA-B para renda fixa que não é DI, Ibovespa para ações, IBrX-100 para quem o declara." },
+    { name: "Benchmark próprio", formula: "o índice que o fundo declara no cadastro", note: "Quando o monitor coleta esse índice: IMA-B, IMA-B 5, IMA-B 5+, IRF-M ou IBrX-100. Se não, CDI para DI e multimercado, IMA-B para renda fixa, Ibovespa para ações." },
     { name: "Pares", formula: "(pares abaixo + ½ empates) ÷ pares", note: "Mesma classificação ANBIMA, público geral, PL acima de R$ 50 mi. Retorno e volatilidade lado a lado: rendeu mais que X % oscilando mais que Y %." },
     { name: "Decomposição do PL", formula: "PL fim − PL início − captação − PL início × retorno", note: "O que sobra aponta dado errado ou evento que o informe não descreve." },
   ];
@@ -80,8 +80,7 @@
   const LIMITATIONS = [
     "Cota sem ajuste por evento: quem paga rendimentos, como os incentivados, parece render menos do que rendeu.",
     "Tudo antes do IR do cotista, o que tira a vantagem do fundo isento.",
-    "Benchmark por classificação, não pelo regulamento de cada fundo.",
-    "O IBX é comparado com o IBrX-100, que declara. Com o Ibovespa, a diferença seria pequena: em 12 meses, 25,15 % contra 25,58 % (rodada de 24/09/2026).",
+    "Quem declara “OUTROS” no cadastro segue a classificação. A Inflação Curta e o Igaraté Long Biased IMA B-5 são comparados com o IMA-B e com o Ibovespa, mas pelo nome são de IMA-B 5, e contra ele os dois perdem.",
     "Pares com viés de sobrevivência: exigir 12 meses, PL acima de R$ 50 mi e cota em dia hoje deixa de fora quem fechou ou encolheu.",
     "FIC e master da mesma estratégia contam como dois pares.",
     "Sem carteira: o evento de crédito é inferido pela cota, não pelos ativos.",
