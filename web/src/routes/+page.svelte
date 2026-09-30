@@ -518,7 +518,8 @@
       <div class="flex flex-col gap-0.5">
         <h2 id="manager-tiles-title" class="text-sm font-semibold">Da gestora</h2>
         <p class="text-base-content/70 text-xs">
-          Todas as classes do escopo, de todos os públicos: segue só exclusivos e veículos estruturais.
+          Todas as classes do escopo, de todos os públicos: segue só exclusivos e veículos estruturais. Um FIC
+          da casa e o fundo em que ele investe entram os dois na soma, então parte do dinheiro conta duas vezes.
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">

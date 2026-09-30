@@ -83,6 +83,7 @@
     "Quem declara “OUTROS” no cadastro segue a classificação. A Inflação Curta e o Igaraté Long Biased IMA B-5 são comparados com o IMA-B e com o Ibovespa, mas pelo nome são de IMA-B 5, e contra ele os dois perdem.",
     "Pares com viés de sobrevivência: exigir 12 meses, PL acima de R$ 50 mi e cota em dia hoje deixa de fora quem fechou ou encolheu.",
     "FIC e master da mesma estratégia contam como dois pares.",
+    "PL e captação da gestora somam o FIC da casa e o fundo em que ele investe: parte do dinheiro conta duas vezes. Caso certo: o Incentivado em Infraestrutura e o FIC dele, com o mesmo PL. Separar pede a carteira de cada FIC.",
     "Sem carteira: o evento de crédito é inferido pela cota, não pelos ativos.",
     "Dado público chega com 2 a 3 dias úteis de atraso.",
   ];
