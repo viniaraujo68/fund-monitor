@@ -3,6 +3,9 @@ export const FUND_SLOT = 1;
 export const BENCHMARK_SLOT: Record<string, number> = {
   cdi: 3,
   ima_b: 0,
+  ima_b_5: 0,
+  ima_b_5_plus: 0,
+  irf_m: 0,
   ibov: 2,
   ibrx: 2,
 };

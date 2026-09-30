@@ -1,6 +1,9 @@
 export const BENCHMARK_LABELS: Record<string, string> = {
   cdi: "CDI",
   ima_b: "IMA-B",
+  ima_b_5: "IMA-B 5",
+  ima_b_5_plus: "IMA-B 5+",
+  irf_m: "IRF-M",
   ibov: "Ibovespa",
   ibrx: "IBrX-100",
 };
