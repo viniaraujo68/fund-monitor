@@ -2,13 +2,12 @@ import math
 
 import polars as pl
 
-from fund_monitor.calc.benchmarks import IBOVESPA, IBRX, IMA_B, attach_level
+from fund_monitor.calc.benchmarks import MARKET_BENCHMARKS, attach_level
 from fund_monitor.calc.returns import TRADING_DAYS_PER_YEAR, daily_returns
 
 RISK_WINDOWS = ("12m", "24m")
 MIN_OBSERVATIONS = 60
 ANNUALIZATION = math.sqrt(TRADING_DAYS_PER_YEAR)
-MARKET_BENCHMARKS = (IMA_B, IBOVESPA, IBRX)
 
 
 def with_benchmark_returns(returns: pl.DataFrame, levels: pl.DataFrame) -> pl.DataFrame:

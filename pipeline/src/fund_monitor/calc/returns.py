@@ -3,14 +3,14 @@ from datetime import date, timedelta
 
 import polars as pl
 
-from fund_monitor.calc.benchmarks import CDI, IBOVESPA, IBRX, IMA_B, attach_accruals, attach_level
+from fund_monitor.calc.benchmarks import CDI, MARKET_BENCHMARKS, attach_accruals, attach_level
 
 TRADING_DAYS_PER_YEAR = 252
 MONTHLY_WINDOWS = {"3m": 3, "6m": 6, "12m": 12, "24m": 24}
 SINCE_START = "since_start"
 MIN_MONTHS_TO_ANNUALIZE = 12
 MAX_QUOTA_STALENESS = timedelta(days=7)
-BENCHMARKS = (CDI, IMA_B, IBOVESPA, IBRX)
+BENCHMARKS = (CDI, *MARKET_BENCHMARKS)
 
 
 def subtract_months(day: date, months: int) -> date:

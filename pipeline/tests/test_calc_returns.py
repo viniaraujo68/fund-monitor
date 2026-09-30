@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from builders import business_days, compound, levels_frame, quotas_frame
-from fund_monitor.calc.benchmarks import attach_accruals, attach_level
+from fund_monitor.calc.benchmarks import attach_accruals, attach_level, benchmark_levels
 from fund_monitor.calc.peers import peer_table
 from fund_monitor.calc.returns import (
     cumulative_index,
@@ -44,6 +44,29 @@ def test_since_start_return_matches_hand_calculation() -> None:
     assert row["cdi_return"] == pytest.approx(1.0005**4 - 1)
     assert row["business_days"] == 4
     assert row["excess_cdi"] == pytest.approx(fund_return - (1.0005**4 - 1))
+
+
+def test_each_anbima_index_is_its_own_benchmark() -> None:
+    cdi = levels_frame(DAYS, CDI_DAILY).filter(pl.col("benchmark") == "cdi")
+    indices = pl.DataFrame(
+        {"index": "cdi", "date": DAYS, "value": [Decimal(str(CDI_DAILY))] * len(DAYS), "unit": "percent_per_day"},
+        schema_overrides={"value": pl.Decimal(18, 8)},
+    )
+    ima = pl.DataFrame(
+        {
+            "index": ["IMA-B"] * len(DAYS) + ["IMA-B 5"] * len(DAYS),
+            "date": DAYS + DAYS,
+            "value": [100.0, 101.0, 102.0, 103.0, 104.0] + [100.0, 100.5, 101.0, 101.5, 102.0],
+        }
+    )
+    empty = pl.DataFrame(schema={"index": pl.String, "date": pl.Date, "value": pl.Float64})
+    levels = benchmark_levels(indices, ima, empty, empty)
+    assert levels.filter(pl.col("benchmark") == "cdi").equals(cdi)
+    row = window_returns(quotas_frame("A", DAYS, QUOTAS), levels, as_of=DAYS[-1]).filter(pl.col("window") == "since_start").row(0, named=True)
+    assert row["ima_b_return"] == pytest.approx(0.04)
+    assert row["ima_b_5_return"] == pytest.approx(0.02)
+    assert row["excess_ima_b_5"] == pytest.approx(row["fund_return"] - 0.02)
+    assert row["irf_m_return"] is None
 
 
 def test_short_windows_are_not_annualized_but_have_pct_cdi() -> None:

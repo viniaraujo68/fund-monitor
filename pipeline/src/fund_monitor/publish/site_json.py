@@ -9,7 +9,7 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from fund_monitor import config
-from fund_monitor.calc.benchmarks import BENCHMARKS_BY_CLASSIFICATION, CDI, IBRX, MARKET_BENCHMARK_BY_CLASSIFICATION
+from fund_monitor.calc.benchmarks import BENCHMARKS_BY_CLASSIFICATION, CDI, DECLARED_BENCHMARKS, MARKET_BENCHMARK_BY_CLASSIFICATION
 from fund_monitor.calc.peers import MIN_PEERS, PEER_METRICS
 from fund_monitor.calc.returns import MONTHLY_WINDOWS, SINCE_START
 from fund_monitor.calc.series import series_id
@@ -28,8 +28,6 @@ INDEX_DIGITS = 4
 WINDOWS = ("mtd", "ytd", *MONTHLY_WINDOWS, SINCE_START)
 FUNDS_DIRECTORY = "funds"
 DI_BENCHMARK = "DI de um dia"
-IBRX_BENCHMARK = "IBrX"
-EQUITIES = "Ações"
 EVENT_RULE = "quota_jump"
 EVENT_MIN_SERIES = 3
 
@@ -300,8 +298,9 @@ def window_value(frame: pl.DataFrame, window: str, column: str, digits: int = RE
 def series_benchmarks(classification: str | None, performance_benchmark: str | None) -> tuple[list[str], str | None]:
     if performance_benchmark == DI_BENCHMARK:
         return [CDI], None
-    if classification == EQUITIES and performance_benchmark == IBRX_BENCHMARK:
-        return [CDI, IBRX], IBRX
+    declared = DECLARED_BENCHMARKS.get(performance_benchmark or "")
+    if declared:
+        return [CDI, declared], declared
     return list(BENCHMARKS_BY_CLASSIFICATION.get(classification, (CDI,))), MARKET_BENCHMARK_BY_CLASSIFICATION.get(classification)
 
 

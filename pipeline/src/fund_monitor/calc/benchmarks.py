@@ -6,9 +6,15 @@ from fund_monitor import config
 
 CDI = "cdi"
 IMA_B = "ima_b"
+IMA_B_5 = "ima_b_5"
+IMA_B_5_PLUS = "ima_b_5_plus"
+IRF_M = "irf_m"
 IBOVESPA = "ibov"
 IBRX = "ibrx"
 LEVEL_TOLERANCE = "7d"
+
+ANBIMA_BENCHMARKS = {IMA_B: "IMA-B", IMA_B_5: "IMA-B 5", IMA_B_5_PLUS: "IMA-B 5+", IRF_M: "IRF-M"}
+MARKET_BENCHMARKS = (*ANBIMA_BENCHMARKS, IBOVESPA, IBRX)
 
 BENCHMARKS_BY_CLASSIFICATION = {
     "Renda Fixa": (CDI, IMA_B),
@@ -16,6 +22,13 @@ BENCHMARKS_BY_CLASSIFICATION = {
     "Ações": (CDI, IBOVESPA),
 }
 MARKET_BENCHMARK_BY_CLASSIFICATION = {"Renda Fixa": IMA_B, "Ações": IBOVESPA}
+DECLARED_BENCHMARKS = {
+    "IBrX": IBRX,
+    "IRF-M": IRF_M,
+    "Índice de Mercado Andima todas NTN-B": IMA_B,
+    "Índice de Mercado Andima NTN-B até 5 anos": IMA_B_5,
+    "Índice de Mercado Andima NTN-B mais de 5 anos": IMA_B_5_PLUS,
+}
 
 
 def cdi_levels(indices: pl.DataFrame) -> pl.DataFrame:
@@ -45,7 +58,7 @@ def benchmark_levels(indices: pl.DataFrame, ima: pl.DataFrame, ibovespa: pl.Data
     return pl.concat(
         [
             cdi_levels(indices),
-            index_levels(ima.filter(pl.col("index") == "IMA-B"), IMA_B),
+            *(index_levels(ima.filter(pl.col("index") == name), benchmark) for benchmark, name in ANBIMA_BENCHMARKS.items()),
             index_levels(ibovespa, IBOVESPA),
             index_levels(ibrx, IBRX),
         ]
