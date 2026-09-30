@@ -2,6 +2,8 @@
 
 **Site:** https://viniaraujo68.github.io/fund-monitor/
 
+**Para avaliar:** 1. [Como funciona](https://viniaraujo68.github.io/fund-monitor/como-funciona/) (roteiro da apresentação) · 2. [Visão geral](https://viniaraujo68.github.io/fund-monitor/) · 3. [Qualidade](https://viniaraujo68.github.io/fund-monitor/qualidade/)
+
 Monitor diário dos fundos não exclusivos da Icatu Vanguarda, feito só com dados públicos da CVM, do Bacen, da ANBIMA e da B3. Um pipeline em Python coleta, calcula e confere os dados todo dia útil, e um site estático mostra o resultado.
 
 ## O que ele responde
@@ -18,7 +20,7 @@ flowchart LR
         CAD[CVM cadastro<br/>registro_fundo_classe]
         INF[CVM informe diário<br/>inf_diario_fi]
         SGS[Bacen SGS 12<br/>CDI]
-        IMA[ANBIMA<br/>IMA-B]
+        IMA[ANBIMA<br/>IMA-B, IMA-B 5,<br/>IMA-B 5+ e IRF-M]
         B3[B3<br/>Ibovespa e IBrX-100]
     end
     CAD & INF & SGS & IMA & B3 --> COL[Coleta]
@@ -71,19 +73,21 @@ BASE_PATH=/fund-monitor npm run build
 
 ## Três achados nos dados reais
 
-- **Evento de crédito da casa, 09/12/2024:** 10 fundos de crédito da gestora caíram no mesmo dia, sem movimento de mercado.
+- **Evento de crédito, 09/12/2024:** 13 séries de crédito da gestora (10 quedas distintas) caíram junto com fundos de crédito de outras gestoras, sem movimento de índice que explique; provável remarcação de um emissor presente em várias carteiras.
 - **Linha zerada, 16/03/2026:** uma subclasse com cerca de 1.470 cotistas informou cota, PL e cotistas iguais a zero.
-- **Distribuição informada como resgate:** o `54023112000197` informa um resgate de cerca de 1 % do PL todo mês, e o PL não cai esse valor.
+- **Distribuição informada como resgate:** o `54023112000197` informa um resgate de cerca de 1 % do PL todo mês; o PL cai uma vez só, pela cota, e o resgate informado fica sem contrapartida no PL.
 
 Detalhes em [`docs/findings.md`](docs/findings.md).
 
 ## Principais limitações
 
 - A cota não é ajustada por amortização ou distribuição, o que subestima o retorno dos incentivados.
-- O benchmark vem da classificação do fundo, não do regulamento.
-- Os pares existem só para Público Geral, com PL acima de R$ 50 milhões, e a comparação é antes do IR do cotista.
+- O benchmark é o índice que a série declara no cadastro quando o monitor o coleta (IMA-B, IMA-B 5, IMA-B 5+, IRF-M, IBrX-100); senão, vem da classificação CVM, não do regulamento.
+- Os pares existem só para Público Geral, e a comparação é antes do IR do cotista. O corte de PL acima de R$ 50 milhões vale para os pares, não para o fundo avaliado.
 - A decomposição mensal do PL supõe que todo o fluxo acontece no fim do mês.
 - Não há carteira: um evento de crédito é inferido pela cota, não confirmado pelo emissor.
+- O PL "Da gestora" soma por classe e conta duas vezes o FIC da casa e o fundo da casa em que ele investe; separar pede a carteira de cada FIC ([`DECISIONS.md`, seção 4.4](docs/DECISIONS.md#44-fluxos-e-tamanho)).
+- Quem declara "OUTROS" como benchmark segue a classificação CVM: as duas séries de IMA-B 5 pelo nome são comparadas com o IMA-B e com o Ibovespa ([`DECISIONS.md`, seção 4.5](docs/DECISIONS.md#45-benchmark-por-série)).
 
 A lista completa está em [`docs/DECISIONS.md`, seção 7](docs/DECISIONS.md#7-limitações-conhecidas).
 
