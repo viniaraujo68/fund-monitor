@@ -1,6 +1,6 @@
 # Achados nos dados reais
 
-O que o pipeline encontrou nos dados públicos. Rodada de referência: último dia completo do informe **24/09/2026**, recalculada em 29/09/2026 com a regra nova de dia de mercado e as tratativas. O site é atualizado todo dia útil; as contagens abaixo são dessa rodada. Universo: 75 séries não exclusivas da Icatu Vanguarda (44 de Público Geral).
+O que o pipeline encontrou nos dados públicos. Rodada de referência: dados até **25/09/2026**, commit de dados `fe0458df453ab6aca6ad8e832b9f7c855e82cbfc`, com a regra nova de dia de mercado, o benchmark declarado e as tratativas de 29/09/2026. A Action diária fica pausada até a entrevista: site e documentos ficam nessa rodada, e as contagens abaixo são dela. Universo: 75 séries não exclusivas da Icatu Vanguarda (44 de Público Geral).
 
 As regras, os limiares e os cortes estão em `docs/DECISIONS.md`; a página "Como funciona" do site resume os dois. Este arquivo não repete regra: aponta para a seção e registra só o que os dados mostraram.
 
@@ -25,32 +25,36 @@ De onde vêm os números:
 | Cadastro divergente | média | 0 | Cadastro e informe da gestora batem |
 | Cota repetida | média | 0 | |
 
-Foram verificados **32.979 pares série × dia útil** em 75 séries.
+Foram verificados **33.054 pares série × dia útil** em 75 séries.
 
-Depois das tratativas de 29/09/2026 (`DECISIONS.md` §5.3): 148 alertas, **30 abertos** (todos médios: 28 saltos de cota e 2 PL sem explicação), 53 tratados (24 explicados, 6 erros da fonte, 23 limitações) e 65 informativos. Antes da regra nova e das tratativas eram 69 abertos.
+Depois das tratativas de 29/09/2026 (`DECISIONS.md` §5.3): 148 alertas, **30 abertos** (todos médios: 28 saltos de cota e 2 PL sem explicação), 53 tratados (24 explicados, 6 erros da fonte, 23 limitações) e 65 informativos. Só 4 dos 30 abertos são dos últimos 30 dias. Na rodada de 26 a 28/09/2026, antes da regra nova do índice e das tratativas de 29/09, eram 69 abertos.
 
-**Taxa de acerto do salto de cota** (107 alertas): 13 eram fato real da casa (o evento de crédito de 09/12/2024); 62 eram mercado (51 reconhecidos pela regra e 11 dias de mercado global em fundos no exterior, confirmados pelo S&P 500 no FRED); 4 eram limitação do informe (pagamento mensal dos incentivados); 28 seguem sem leitura. Três dias entre os abertos parecem outro evento da casa, com várias séries de crédito caindo juntas sem mercado: 18 e 19/03/2026 e 13/08/2026, a investigar com a carteira. **PL sem explicação** (21): 19 são limitação (distribuição como resgate e fluxo no meio do mês, com resíduo diário zero) e 2 seguem abertos.
+**Taxa de acerto do salto de cota** (107 alertas): 13 eram evento de crédito real (de mercado, com 13 séries da casa: o 09/12/2024, item 1); 62 eram mercado (51 reconhecidos pela regra e 11 dias de mercado global em fundos no exterior, confirmados pelo S&P 500 no FRED); 4 eram limitação do informe (pagamento mensal dos incentivados); 28 seguem sem leitura. Os 51 de mercado foram rotulados pela própria regra, então a precisão medida lendo um por um é sobre os 56 saltos médios: 13 evento de crédito, 11 mercado global, 4 limitação e 28 sem leitura. Três dias entre os abertos são dias de crédito no mercado, com fundos de crédito de várias gestoras caindo: 18/03/2026 (na casa, uma série só, o CDI IU `62571624000116`), 19/03/2026 (dia do Copom; CDI IU `62571624000116`, BB Debêntures Incentivadas CDI `63053090000107` e Infra Alocação Fundos 95 `63826355000154`) e 13/08/2026 (Absoluto FIFE `34081211000118` e as duas subclasses do Iporã PG, `35609382000130-A8AAW1750173152` e `35609382000130-ZN9EI1750172960`), a investigar com a carteira. **PL sem explicação** (21): 19 são limitação (distribuição como resgate e fluxo no meio do mês, com resíduo diário zero) e 2 seguem abertos.
+
+**Benchmark declarado** (achado da revisão de 29/09/2026, `DECISIONS.md` §4.5): a manchete anterior, 6 de 36 séries de Público Geral acima do próprio benchmark em 12 meses, incluía a Inflação Curta FIC (`12682783000110`), com +0,47 p.p. sobre o IMA-B. Ela declara IMA-B 5 no cadastro, e contra o IMA-B 5 perde 1,12 p.p. Com o índice declarado, a manchete é **5 de 36**. A Inflação Curta `10922432000103` declara "OUTROS" e segue contra o IMA-B (+1,22 p.p.); contra o IMA-B 5 ela também perde (−0,38 p.p.), e a manchete seria 4 de 36.
 
 Uma ressalva vale para as contagens: numa classe com duas subclasses, um fato anterior à divisão aparece como um alerta em cada subclasse (`DECISIONS.md` §5, "Linhas herdadas"). Os itens 1 e 4 dizem quantos fatos distintos há por trás de cada contagem.
 
-## 1. Evento de crédito da casa: 09/12/2024
+## 1. Evento de crédito: 09/12/2024
 
-**13 séries de crédito, de 10 CNPJs,** caíram no mesmo dia, entre −0,11 % e −0,53 %, em fundos cujo retorno médio nos 60 dias anteriores era de +0,04 % ao dia: Absoluto FIFE, Absoluto Plus, Credit Plus, Credit Plus Master, Credit Plus VC, Crédito Privado, Crédito Privado Liquidez, Institucional IS, Iporã PG e Plus. Crédito Privado (`07900255000150`), Crédito Privado Liquidez (`44917374000141`) e Iporã PG (`35609382000130`) ainda não tinham subclasses: cada uma tinha uma cota só, que hoje aparece nas duas subclasses que a herdam. São 10 quedas distintas, não 13.
+**13 séries de crédito, de 10 CNPJs,** caíram no mesmo dia, entre −0,11 % e −0,53 %, em fundos cujo retorno médio nos 60 retornos anteriores era de +0,04 % ao dia: Absoluto FIFE, Absoluto Plus, Credit Plus, Credit Plus Master, Credit Plus VC, Crédito Privado, Crédito Privado Liquidez, Institucional IS, Iporã PG e Plus. Crédito Privado (`07900255000150`), Crédito Privado Liquidez (`44917374000141`) e Iporã PG (`35609382000130`) ainda não tinham subclasses: cada uma tinha uma cota só, que hoje aparece nas duas subclasses que a herdam. São 10 quedas distintas, não 13.
 
-No universo de pares, só 2,3 % dos fundos de Renda Fixa tiveram salto nesse dia. Não foi mercado: foi algo comum às carteiras da gestora, provavelmente a remarcação de um mesmo emissor, **a confirmar** com a carteira. É o tipo de coisa que o monitor deve mostrar e que a regra sem o piso e sem o dia de mercado escondia no meio de 127 alertas (`DECISIONS.md` §5.1).
+Não foi só a casa. No mesmo dia caíram fundos de crédito e de infraestrutura de outras gestoras: JGP Deb Incent Juros Reais (`41594333000173`) −1,50 %, Premium Institucional (`37780270000172`) −2,07 %, Tagus (`16599959000125`) −0,51 %, e ainda Régia (`53828295000155`), XP Corporate Top (`04621721000170`), Principal Claritas (`11447136000160`) e Itaú Active Fix (`17051205000107`). Nos fundos ANBIMA "Crédito Livre" de outras gestoras, 2,83 % saltaram nesse dia, o 10.º maior dia entre 459 (mediana 0,15 %). O feeder `32835611000146` (ICATU VANGUARDA CRÉDITO PRIVADO LONGO PRAZO IU FIF DA CIC, gestor Itaú no cadastro) caiu −0,21 % junto. Foi um dia de crédito no mercado, sem movimento de índice que explique: o Ibovespa e o IMA-B ficaram dentro do padrão. Leitura provável: remarcação de um emissor presente em várias carteiras, **a confirmar** com a carteira.
+
+O que o caso mostra: a fração de pares por classificação CVM não enxergava crédito (só 2,3 % dos fundos de Renda Fixa do universo de pares saltaram, porque a classe é dominada por fundos DI), e o índice também não enxerga. Falta um índice de crédito, como o IDA da ANBIMA. É o tipo de coisa que o monitor deve mostrar e que a regra sem o piso e sem o dia de mercado escondia no meio de 127 alertas (`DECISIONS.md` §5.1).
 
 ## 2. Dias de mercado: 05/12/2025 e 13/03/2026
 
-Em **05/12/2025**, 72 % dos fundos de ações, 32 % dos multimercados e 16 % dos de renda fixa do universo de pares tiveram salto. O Dividendos (`08279304000141-9WCV01767643284`) caiu −4,53 % e o IBX (`06224719000192`) −4,29 %; os 24 alertas do dia ficaram informativos. Em **13/03/2026**, 12 % da renda fixa do universo de pares saltou, e 11 dos 13 alertas do dia ficaram informativos.
+Em **05/12/2025**, 72 % dos fundos de ações, 32 % dos multimercados e 16 % dos de renda fixa do universo de pares tiveram salto. O Dividendos (`08279304000141-9WCV01767643284`) caiu −4,53 % e o IBX (`06224719000192`) −4,29 %; os 24 alertas do dia ficaram informativos. Em **13/03/2026**, 12 % da renda fixa do universo de pares saltou, e os 13 alertas do dia ficaram informativos.
 
 ## 3. Distribuição informada como resgate: Incentivado em Infraestrutura
 
-`54023112000197` (1 cotista, R$ 49,4 mi): o informe traz **resgate de cerca de R$ 505 mil todo mês**, cerca de 1 % do PL, e nenhuma aplicação, mas o PL não cai esse valor. O resíduo da decomposição fica entre +0,97 % e +1,03 % em **todos os 24 meses**; 11 deles passam do limite de 1 %. A cota cai 3,1 % em dez/2024.
+`54023112000197` (1 cotista, R$ 49,4 mi): o informe traz **resgate de cerca de R$ 505 mil todo mês**, cerca de 1 % do PL, e nenhuma aplicação. O PL cai uma vez só, pela cota; o que não tem contrapartida no PL é o resgate informado. Nas 25 datas de pagamento, o resíduo diário é igual ao resgate informado, no centavo (em 06/12/2024: resgate de R$ 502.000,00, resíduo de R$ 501.999,99). O resíduo mensal da decomposição fica entre +0,97 % e +1,03 % em **todos os 24 meses**; 11 deles passam do limite de 1 %. A cota cai 3,1 % em dez/2024.
 
 Leitura provável (**a confirmar**): pagamento de rendimentos ou amortização, que sai da cota **e** aparece como resgate. Dois efeitos:
 
 - a decomposição do PL conta o pagamento duas vezes, e o alerta de PL é legítimo;
-- o retorno pela cota subestima o que o cotista recebeu: o fundo aparece com −4,36 % em 12 meses e percentil 4 % entre 359 pares (`DECISIONS.md` §7, "Cota não ajustada por evento").
+- o retorno pela cota subestima o que o cotista recebeu: o fundo aparece com −4,13 % em 12 meses e P4 entre 361 pares (`DECISIONS.md` §7, "Cota não ajustada por evento").
 
 ## 4. Duplicidade na passagem para a RCVM 175
 
@@ -70,12 +74,12 @@ A exceção é `58327943000103-NANFG1779473395` (Dinâmico CDI IU). Ela nasceu e
 
 ## 7. PL sem explicação em fundos novos ou com fluxo grande
 
-- `67775604000180` (Credit Plus K, desde jul/2026): em set/2026, resgates de R$ 150,4 mi contra queda de PL de só R$ 9,9 mi. O resgate pode ter sido compensado por uma aplicação que não aparece como captação (movimento entre veículos). **A investigar.**
+- `67775604000180` (Credit Plus K, desde jul/2026): em set/2026, resgates de R$ 150,4 mi contra queda de PL de só R$ 9,9 mi. Em 14/09/2026 o informe traz resgate de R$ 139.758.102,45, e o PL passa de R$ 142.918.687,61 para R$ 142.956.492,31. Em 21/09/2026 o resgate de R$ 10,6 mi aparece no PL. Nenhum CNPJ da Icatu Vanguarda recebeu uma aplicação equivalente. Leitura: resgate informado sem contrapartida no PL, provável erro de envio; pergunta para o administrador. **Em aberto.**
 - `54198519000155-TY3I61766775472` (Igaraté Long Biased IBOV), fev/2026: resíduo de 44 % do PL inicial. O PL passou de R$ 1,8 mi para R$ 42,5 mi com aplicação de R$ 39,9 mi no mês, e o dinheiro que entra no meio do mês rende só parte dele. É limitação da regra, não do dado (`DECISIONS.md` §7).
 
 ## 8. Fonte atrasada: portal da CVM fora do ar
 
-Em 26 e 27/09/2026, `dados.cvm.gov.br` não respondeu nem por IPv4 nem por IPv6, enquanto Bacen e GitHub respondiam. Numa execução local de 27/09, não publicada, a última data do informe estava em 22/09/2026, 3 dias de semana de atraso contra a tolerância de 2, e a regra 8 marcou o atraso. Na rodada de 28/09, com o portal de volta, não há alerta: as quatro fontes têm dado até 25/09/2026.
+Em 26 e 27/09/2026, sábado e domingo, `dados.cvm.gov.br` não respondeu nem por IPv4 nem por IPv6, enquanto Bacen e GitHub respondiam. A Action não roda no fim de semana; foi uma execução local. Quando o portal não responde, a coleta da CVM falha, a execução para e o site fica na última rodada boa. A regra 8 não pega esse caso: ela pega a fonte que responde com dado velho. O que ela marcou foi o informe que já estava em disco: numa execução local de 27/09, não publicada, a última data era 22/09/2026, 3 dias de semana de atraso contra a tolerância de 2. Tentar de novo e publicar com o alerta de fonte atrasada é próximo passo de produção (`PRODUCTION.md` §3). Na rodada de 28/09, com o portal de volta, não há alerta: as cinco fontes têm dado até 25/09/2026.
 
 ## 9. Classe em transição some do cadastro: Igaraté Long Biased
 
@@ -83,7 +87,7 @@ Entre 24 e 27/09/2026, a classe `35637151000130` (Igaraté Long Biased, Público
 
 ## 10. Dia parcial no informe
 
-No arquivo de setembro baixado em 28/09, o dia **25/09/2026 tinha só 8 das 246 classes** da gestora. Usar "última data com cota" como data de referência deixaria as outras séries com um falso dia sem informe e fundos terminando em dias diferentes. A data de referência ficou em 24/09/2026 (`DECISIONS.md` §4.1).
+No arquivo de setembro baixado em 28/09, o dia **25/09/2026 tinha só 8 das 246 classes** da gestora. Usar "última data com cota" como data de referência deixaria as outras séries com um falso dia sem informe e fundos terminando em dias diferentes. A data de referência ficou em 24/09/2026 (`DECISIONS.md` §4.1). Na rodada atual, com o dia completo, os dados vão até 25/09/2026.
 
 ## 11. Republicação do histórico
 
@@ -106,7 +110,7 @@ Na revisão de 29/09/2026, o site dizia "queda isolada: fora do padrão da próp
 
 A causa estava na própria regra. O "dia de mercado" era medido pela fração de fundos da mesma classificação CVM que saltaram no dia, e o Multimercado e a Renda Fixa do universo de pares são dominados por fundos DI: um dia forte de bolsa ou de IMA-B quase nunca chegava a 10 % da classe. Na prática, a regra só reconhecia mercado em Ações.
 
-O conserto foi olhar o índice que mais se parece com cada fundo. Se o Ibovespa ou o IMA-B, com correlação de pelo menos 0,5 nos 60 retornos anteriores, também saiu do padrão no mesmo dia e no mesmo sentido (acima de 2,5σ), o salto vira informativo. Os 16 alertas da tabela deixaram de ser isolados. O evento de crédito de 09/12/2024 continuou isolado nas 13 séries: nesse dia o Ibovespa subiu 1,00 % e o IMA-B caiu 0,24 %, ambos dentro do padrão, e os fundos de crédito quase não se parecem com os dois (`DECISIONS.md` §5.1).
+O conserto foi olhar o índice que mais se parece com cada fundo. Se o Ibovespa ou o IMA-B, com correlação de pelo menos 0,5 nos 60 retornos anteriores, também saiu do padrão no mesmo dia e no mesmo sentido (acima de 2,5σ), o salto vira informativo. Os 16 alertas da tabela deixaram de ser isolados. O evento de crédito de 09/12/2024 continuou isolado nas 13 séries: nesse dia o Ibovespa subiu 1,00 % e o IMA-B caiu 0,24 %, ambos dentro do padrão. Não é que os fundos de crédito não se pareçam com os índices: o Plus (`05755769000133`) tem ρ 0,82 com o IMA-B e só continuou isolado porque o IMA-B andou −0,65σ no dia. O índice não vê crédito (item 1; `DECISIONS.md` §5.1).
 
 Os fundos no exterior não têm índice coletado: os dias de mercado global deles (03/04/2025, 04/04/2025 e 09/04/2025, por exemplo) viraram tratativa à mão, com o movimento do mercado na nota.
 

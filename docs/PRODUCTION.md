@@ -16,20 +16,20 @@ O caminho é contínuo, não uma reescrita. O protótipo já tem as peças que u
 
 ## 2. Dado interno e dado público
 
-Este monitor olha a gestora de fora, pelo que ela envia à CVM. Dentro da gestora, a ordem das fontes se inverte.
+Este monitor olha a gestora de fora, pelo que o administrador dos fundos dela envia à CVM. Dentro da gestora, a ordem das fontes se inverte.
 
-- **Fundos da casa: administrador e sistema interno.** A cota oficial de cada fundo sai do administrador no D0 ou no D+1, e a carteira sai do sistema interno. A CVM só publica o informe diário com 2 a 3 dias úteis de atraso: na rodada de 29/09/2026, o último dia completo era 24/09/2026. Em produção, os indicadores dos fundos próprios são calculados sobre a cota do administrador, e o informe da CVM não é a fonte deles.
-- **CVM: pares e conferência do que foi enviado.** O informe continua sendo a única fonte dos pares, que são fundos de outras gestoras. E serve para conferir o que a gestora mandou ao regulador contra a cota interna. A linha zerada de 16/03/2026 e a duplicidade `FI` × `CLASSES - FIF` de 24/04/2025 (`findings.md`, itens 4 e 5) são erros de envio: a cota interna estava certa, e o erro só aparece no dado público. Uma regra nova, "cota da CVM diferente da cota do administrador no mesmo dia", pega esse caso no dia em que ele entra.
+- **Fundos da casa: administrador e sistema interno.** A cota oficial de cada fundo sai do administrador no D0 ou no D+1, e a carteira sai do sistema interno. A CVM só publica o informe diário com 2 a 3 dias úteis de atraso: na rodada de 29/09/2026, o último dia completo era 25/09/2026. Em produção, os indicadores dos fundos próprios são calculados sobre a cota do administrador, e o informe da CVM não é a fonte deles.
+- **CVM: pares e conferência do que foi enviado.** O informe continua sendo a única fonte dos pares, que são fundos de outras gestoras. Quem envia o informe diário é o administrador fiduciário, não a gestora; a CVM publica o que recebe. O informe serve para conferir o que o administrador enviou à CVM contra a cota interna. A linha zerada de 16/03/2026 e a duplicidade `FI` × `CLASSES - FIF` de 24/04/2025 (`findings.md`, itens 4 e 5) são erros de envio, a conferir contra a cota do administrador. Uma regra nova, "cota da CVM diferente da cota do administrador no mesmo dia", pega esse caso no dia em que ele entra.
 - **Horário.** O número da mesa precisa estar pronto antes da abertura: a cota D0 do administrador processada até cerca de 9h do D+1. O monitor público roda às 20h17 e mostra o dia D-2 ou D-3; ele serve para a comparação com o mercado, não para a decisão do dia.
-- **Fonte atrasada.** Quando uma fonte não chega no horário, a publicação sai assim mesmo: o que depende dela fica marcado com o alerta de fonte atrasada e com a data do último dado, e o resto não espera. Hoje a regra 8 já marca o atraso, mas a execução é uma só (ver 3). Se o administrador atrasa, a mesa vê a cota de ontem com a marca, não uma tela vazia.
+- **Fonte atrasada.** Quando uma fonte não chega no horário, a publicação sai assim mesmo: o que depende dela fica marcado com o alerta de fonte atrasada e com a data do último dado, e o resto não espera. Hoje a regra 8 só marca a fonte que responde com dado velho. Quando a fonte não responde, a execução falha e o site fica na última rodada boa (ver 3). Se o administrador atrasa, a mesa vê a cota de ontem com a marca, não uma tela vazia.
 - **Precisão das regras.** Cada alerta tratado tem um desfecho (`explained`, `source_error`, `limitation`; `DECISIONS.md` §5.3). Por regra, a fração de alertas que viraram erro da fonte ou evento real, contra a fração explicada por mercado e a que ficou aberta, é a medida de precisão. Uma regra cujo desfecho mais comum é "era mercado" está com o limiar ou a referência de mercado errados e precisa de recalibração. É com esse número, e não com a intuição, que 5 desvios-padrão ou 1 % do PL se defendem.
 
 ## 3. Orquestração
 
-- **Um fluxo por fonte**, em Dagster ou Airflow: cadastro CVM, informe diário, Bacen, ANBIMA e B3. Hoje, se a CVM cai, tudo espera; foi o que aconteceu em 26 e 27/09/2026. Separado, só o que depende da CVM espera, e o resto publica com o alerta de fonte atrasada.
+- **Um fluxo por fonte**, em Dagster ou Airflow: cadastro CVM, informe diário, Bacen, ANBIMA e B3. Hoje, se o portal da CVM não responde, a coleta falha, a execução para e o site fica na última rodada boa. Foi o que se viu em 26 e 27/09/2026, sábado e domingo, numa execução local: a regra 8 não pegou a queda, porque ela só pega a fonte que responde com dado velho. Separado, com nova tentativa, só o que depende da CVM espera, e o resto publica com o alerta de fonte atrasada.
 - **Partição por `(fonte, data)`.** Backfill é reprocessar partições. Como a coleta já regrava cada mês, dia ou ano inteiro, reprocessar não duplica nada.
 - **Dependências explícitas.** O cálculo só roda quando o dia do informe está completo. A regra dos 90 % das séries vira um sensor, em vez de um filtro dentro do cálculo.
-- **Retry com espera crescente** nas fontes instáveis (portal da CVM, formulário da ANBIMA). Depois do último retry, alerta. Hoje só o Bacen tem nova tentativa, 3 vezes com 2 s fixos; nas outras fontes, a falha derruba a execução, e a ANBIMA pede o dia de novo na execução seguinte.
+- **Retry com espera crescente** nas fontes instáveis (portal da CVM, formulário da ANBIMA). Depois do último retry, a publicação sai assim mesmo, com o alerta de fonte atrasada no que depende da fonte. Hoje só o Bacen tem nova tentativa, 3 vezes com 2 s fixos; nas outras fontes, a falha derruba a execução, e a ANBIMA pede o dia de novo na execução seguinte.
 - **Por que Dagster:** o modelo de "ativos" (arquivo bruto → Parquet → métricas → JSON) é o desenho que o pipeline já tem. Airflow também serve; a escolha depende do que a casa já usa.
 
 ## 4. Armazenamento
@@ -49,7 +49,7 @@ Guardar cada versão do bruto importa porque a CVM regrava o histórico. Em 27/0
 - **Severidade alta bloqueia a publicação da série afetada**, não do site inteiro. Uma linha zerada num fundo não deveria segurar os outros 74.
 - **Relatório diário para a mesa com o que é novo.** Hoje a lista acumula os alertas de 24 meses, e o alerta de ontem se perde entre eles.
 - **Estado do alerta.** Visto, explicado, erro da fonte. Hoje o estado vem de `data/triage.json`, editado à mão (`DECISIONS.md` §5.3), e o alerta ainda não tem dono nem prazo. Em produção, o `triage.json` vira uma tabela com dono e prazo por alerta, alimentada pela mesa.
-- **Limiares revisados com a mesa.** 5 desvios-padrão, 0,1 %, 1 % do PL e 10 % do mercado foram calibrados olhando 24 meses de uma gestora. Precisam de uma revisão com quem usa o alerta.
+- **Limiares revisados com a mesa.** 5 desvios-padrão, 0,1 %, 1 % do PL, 10 % do mercado e, na regra de dia de mercado, os 2,5σ do índice e o |ρ| ≥ 0,5 foram calibrados olhando os mesmos 24 meses de uma gestora. Precisam de uma revisão com quem usa o alerta.
 
 ## 6. Observabilidade
 
@@ -71,8 +71,8 @@ Em ordem de valor para a mesa, como eu vejo:
 
 1. **Decomposição diária do PL.** Resolve o resíduo inflado de fundos com fluxo grande no mês, como `54198519000155-TY3I61766775472` em fev/2026. É a menor das mudanças e usa só o dado que já existe.
 2. **Cota ajustada por evento.** Precisa de uma fonte de amortizações e distribuições, que o informe não tem. Corrige o retorno e a posição entre pares dos incentivados.
-3. **Carteiras (CDA da CVM)** para exposição por emissor e por setor. Teria dito qual emissor explica o 09/12/2024. A CDA é mensal: serve para exposição, não para o dia a dia.
-4. **Benchmark ANBIMA completo com contrato**, com o índice do regulamento de cada fundo (IMA-B 5, IRF-M, IMA-S), no lugar da regra por classificação e do download dia a dia.
+3. **Carteiras (CDA da CVM)** para exposição por emissor e por setor. Teria dito qual emissor explica o 09/12/2024. Também resolve a dupla contagem no PL "Da gestora": o agregado soma por classe e conta duas vezes o FIC da casa e o fundo da casa em que ele investe (o Incentivado em Infraestrutura FIC `53248945000193` e o `54023112000197`, cerca de R$ 49,4 mi cada; teto de cerca de R$ 1,66 bi, 11 % do PL não exclusivo sem estruturais). A CDA é mensal: serve para exposição, não para o dia a dia.
+4. **Benchmark ANBIMA completo com contrato**, no lugar do download dia a dia. O índice declarado no cadastro já é usado quando o monitor o coleta (IMA-B, IMA-B 5, IMA-B 5+, IRF-M, IBrX-100); falta o do regulamento para quem declara "OUTROS", o IMA-S e um índice de crédito (IDA).
 5. **Comparação entre gestoras.** O cadastro e o informe já cobrem o país, e os pares já leem 3.392 séries (rodada de 28/09/2026). Trocar o CNPJ da gestora por uma lista é pouco código; o custo é de leitura e armazenamento.
 6. **Pares para Qualificado e Profissional**, com o mesmo método.
 7. **Marcação a mercado das posições com curva de juros.** É o passo seguinte natural, e foi deixado de fora de propósito neste case. Não está construído.

@@ -1,6 +1,6 @@
 # Decisões e metodologia
 
-Este documento explica o que o fund-monitor calcula, de onde vêm os dados e por que cada corte foi feito. **Os números citados são da rodada com dados até 24/09/2026** (último dia completo do informe diário), recalculada em 29/09/2026 com as regras deste documento; quando um número é de outro dia, a data vem junto. O site é atualizado todo dia útil pela Action e passa a mostrar números mais novos que os daqui: contagens de alertas, PL e posições entre pares valem para aquela rodada. A fonte da verdade é o código; as constantes estão no apêndice.
+Este documento explica o que o fund-monitor calcula, de onde vêm os dados e por que cada corte foi feito. **Os números citados são da rodada com dados até 25/09/2026** (último dia completo do informe diário, commit de dados `fe0458df453ab6aca6ad8e832b9f7c855e82cbfc`), recalculada em 29/09/2026 com as regras deste documento; quando um número é de outro dia, a data vem junto. A Action diária está pausada até a entrevista: o site e este documento mostram a mesma rodada. A fonte da verdade é o código; as constantes estão no apêndice.
 
 ## 1. O que é o projeto
 
@@ -29,7 +29,7 @@ Convenções que valem para o documento inteiro:
 | Cadastro CVM (RCVM 175) | `https://dados.cvm.gov.br/dados/FI/CAD/DADOS/registro_fundo_classe.zip` | ZIP com 3 CSV, Latin-1, `;` | Baixado uma vez por data de referência | Quem é da gestora, classificação, público, exclusividade, benchmark declarado |
 | Informe diário CVM | `https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/inf_diario_fi_AAAAMM.zip` | ZIP mensal com 1 CSV, Latin-1, `;`, ponto decimal | Dado diário, arquivo mensal, republicado | Cota, PL, captação, resgate, cotistas |
 | Bacen SGS | `https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json` | JSON, datas e valores como texto | Diário | CDI como benchmark e taxa livre de risco |
-| ANBIMA IMA | `POST https://www.anbima.com.br/informacoes/ima/ima-sh-down.asp` | CSV, Latin-1, `;`, vírgula decimal | Um arquivo por dia de semana (feriado vem vazio) | IMA-B |
+| ANBIMA IMA | `POST https://www.anbima.com.br/informacoes/ima/ima-sh-down.asp` | CSV, Latin-1, `;`, vírgula decimal | Um arquivo por dia de semana (feriado vem vazio) | IMA-B, IMA-B 5, IMA-B 5+ e IRF-M |
 | B3 Ibovespa e IBrX-100 | `GET https://sistemaswebb3-listados.b3.com.br/indexStatisticsProxy/IndexCall/GetPortfolioDay/{base64}` | JSON, números em texto pt-BR | Um arquivo por ano e por índice | Ibovespa (`IBOV`) e IBrX-100 (`IBXX`) |
 
 A janela coletada começa em **01/09/2024** (`WINDOW_START`), o que dá 24 meses até setembro de 2026, para a gestora e para os pares.
@@ -65,7 +65,7 @@ Armadilhas:
 - 72 linhas de 23 CNPJs aparecem duas vezes no mesmo dia, uma como `FI` e outra como `CLASSES - FIF`, em 19 datas entre 15/10/2024 e 01/07/2025, na passagem para a RCVM 175 (ver 4.1).
 - O último dia do arquivo pode estar incompleto: em 28/09/2026, o dia 25/09/2026 tinha só 8 das 246 classes da gestora (ver 4.1).
 - A CVM consolida o arquivo mensal com atraso de 2 a 3 dias úteis: em 28/09/2026 às 21h, o arquivo de setembro ainda tinha o dia 25 (sexta) incompleto e nada do dia 28 (segunda); o informe não tem linhas de fim de semana. Por isso o "Dados até" do site anda nesse passo, atrás do calendário.
-- Em 26 e 27/09/2026 o portal `dados.cvm.gov.br` não respondeu. A regra 8 existe para esse caso (ver 5).
+- Em 26 e 27/09/2026, um sábado e um domingo, o portal `dados.cvm.gov.br` não respondeu numa execução local. Quando o portal não responde, a coleta para com erro (`collect/download.py`), a execução falha e o site fica na última rodada boa. A regra 8 cobre o outro caso: a fonte responde, mas com dado velho (ver 5).
 
 ### 2.3 Bacen SGS
 
@@ -79,17 +79,17 @@ Armadilhas:
 - Um POST por dia de semana, sem login, com a data no corpo do formulário, com pausa de 1 s entre eles. De 02/09/2024 a 25/09/2026 são 540 dias de semana; os 20 feriados voltam como um arquivo de 46 bytes que começa com "Não há dados disponíveis".
 - A resposta só é gravada se tiver a linha de cabeçalho (`Índice;...`) ou começar com "Não há dados disponíveis". Qualquer outra coisa não é gravada, e o dia é pedido de novo na execução seguinte.
 - Um dia já gravado não é pedido de novo, com duas exceções: o arquivo gravado não é uma resposta esperada, ou o dia é recente (até 7 dias antes da referência, `ANBIMA_RETRY_EMPTY_DAYS`) e veio sem dados.
-- Linhas guardadas: IMA-B, IMA-B 5, IMA-B 5+, IRF-M, IMA-S e IMA-GERAL. **Só o IMA-B entra no cálculo.**
+- Linhas guardadas: IMA-B, IMA-B 5, IMA-B 5+, IRF-M, IMA-S e IMA-GERAL. **IMA-B, IMA-B 5, IMA-B 5+ e IRF-M entram no cálculo** (4.5); IMA-S e IMA-GERAL, não.
 - Histórico confirmado em 24/09/2026: a linha do IMA-B vem preenchida desde pelo menos 03/01/2022. A janela de 24 meses cabe inteira.
 - Linha com data diferente da pedida é descartada.
-- Conferência externa: o IMA-B de 12 e 24 meses publicado nesta rodada (12,5782 % e 19,2681 %, de 24/09/2025 e 24/09/2024 até 24/09/2026) é igual, nas 4 casas, às colunas "Variação 12 Meses(%)" e "Variação 24 Meses(%)" do próprio arquivo da ANBIMA de 24/09/2026.
+- Conferência externa: o IMA-B de 12 e 24 meses publicado nesta rodada (12,8398 % e 19,3693 %, de 25/09/2025 e 25/09/2024 até 25/09/2026) é igual, nas 4 casas, às colunas "Variação 12 Meses(%)" e "Variação 24 Meses(%)" do próprio arquivo da ANBIMA de 25/09/2026.
 
 ### 2.5 B3 Ibovespa e IBrX-100
 
 - Uma chamada por ano e por índice, com `{"index":"IBOV","language":"pt-br","year":"AAAA"}` em base64 no caminho; para o IBrX-100 o código é `IBXX` (conferido em 29/09/2026: o mesmo endpoint devolve o IBrX-100 com o mesmo formato; `IBXL` é o IBrX-50). A resposta tem uma linha por dia do mês e uma coluna por mês (`rateValue1` a `rateValue12`), com o fechamento em texto (`"183.965,91"`).
 - A resposta é lida antes de ser gravada. Se não for legível, ou se for de um ano passado e vier sem nenhum fechamento, nada é gravado e a coleta para com erro.
 - Cobertura em 28/09/2026: 2024 com 251 pregões, 2025 com 250, 2026 com 184 até 25/09. O IBrX-100 tem os mesmos pregões (517 fechamentos de 02/09/2024 a 28/09/2026).
-- O IBrX-100 entrou em 29/09/2026 para as três séries de ações que declaram IBrX (4.5). Em 12 meses até 24/09/2026 ele rendeu 25,15 %, contra 25,58 % do Ibovespa: comparar essas séries com o Ibovespa custava 0,43 p.p. de excesso.
+- O IBrX-100 entrou em 29/09/2026 para as três séries de ações que declaram IBrX (4.5). Em 12 meses até 25/09/2026 ele rendeu 25,85 %, contra 26,27 % do Ibovespa: comparar essas séries com o Ibovespa custava 0,42 p.p. de excesso.
 - Armadilha: **o valor do dia corrente aparece antes do fechamento**. O coletor descarta a data de execução e fica só com dias encerrados.
 - O ano corrente é baixado de novo a cada execução. Um ano passado é baixado de novo até o arquivo ser final: gravado depois de 31/12 e com o último pregão esperado do ano (o último dia de semana até 30/12), ou gravado mais de 10 dias depois do fim do ano (`REFRESH_GRACE_DAYS`), o que vier primeiro.
 
@@ -126,7 +126,7 @@ Decidido em 24/09/2026.
 
 - Fundo exclusivo tem um cotista só. A captação e o resgate são decisão desse cliente, não reflexo da gestão.
 - Não tem par: é um produto sob medida.
-- Distorce qualquer agregado. Em 24/09/2026, as séries exclusivas somam R$ 66,2 bi dos R$ 93,3 bi da gestora, 71 % do PL.
+- Distorce qualquer agregado. Em 25/09/2026, as séries exclusivas somam R$ 66,3 bi dos R$ 93,4 bi da gestora, 71 % do PL.
 - O interruptor "Incluir exclusivos" existe, mas só muda os números "Da gestora" e o gráfico de captação por classificação. Tabela, rankings e pares nunca incluem exclusivos.
 
 ### 3.3 Por que Público Geral em destaque
@@ -172,7 +172,7 @@ Decidido em 24/09/2026. O filtro é `Tipo_Classe = "Classes de Cotas de Fundos F
 
 - Quando a classe cria subclasses, cada subclasse nasce com a mesma cota da classe. Antes disso, a história está na linha sem subclasse.
 - A série da subclasse herda **só a cota** das linhas da classe anteriores à sua primeira cota própria. Exemplo: `44917374000141-UYXKV1750167974` herda a cota até 16/06/2025. O site avisa no cadastro do fundo.
-- PL, captação e cotistas **não** são herdados: usam só as linhas da própria série. Herdar a linha inteira contaria o PL em dobro nas classes com duas subclasses não exclusivas. A captação de 12 meses só fica marcada como parcial quando a primeira linha própria é posterior ao início da janela (ver 4.4). As subclasses criadas em 17/06/2025, como `44917374000141-UYXKV1750167974`, já têm os 12 meses inteiros e não levam a marca; as criadas depois de 24/09/2025 levam.
+- PL, captação e cotistas **não** são herdados: usam só as linhas da própria série. Herdar a linha inteira contaria o PL em dobro nas classes com duas subclasses não exclusivas. A captação de 12 meses só fica marcada como parcial quando a primeira linha própria é posterior ao início da janela (ver 4.4). As subclasses criadas em 17/06/2025, como `44917374000141-UYXKV1750167974`, já têm os 12 meses inteiros e não levam a marca; as criadas depois de 25/09/2025 levam.
 - Nas classes com duas subclasses, as duas herdam a mesma história de cota. Até a divisão, elas não são duas medidas independentes (ver 5).
 - **Regra dos 7 dias:** a herança só vale se a classe publicou cota nos 7 dias corridos antes da primeira cota da subclasse. Caso real: `58327943000103-NANFG1779473395` (Dinâmico CDI IU) nasceu em 12/08/2026 de uma subclasse irmã, três meses depois de a classe parar de publicar. Herdar a cota da classe criaria um "retorno diário" de +3,6 % que não existiu. Das 14 subclasses monitoradas, 13 herdam.
 
@@ -200,20 +200,20 @@ As linhas descartadas pelo cálculo são, portanto, três: a linha com cota ≤ 
 
 Se a série começou depois da âncora, a janela fica vazia ("sem histórico"). O número de dias úteis `n` de cada janela é o número de dias de CDI entre a base e o fim.
 
-**Série parada.** Se a última cota da série tem mais de 7 dias corridos antes do dia de referência (`MAX_QUOTA_STALENESS`), o retorno da janela ainda é publicado, mas sem anualização, sem % do CDI e sem Sharpe, e a série sai dos pares. Hoje todas as 75 séries têm cota em 24/09/2026.
+**Série parada.** Se a última cota da série tem mais de 7 dias corridos antes do dia de referência (`MAX_QUOTA_STALENESS`), o retorno da janela ainda é publicado, mas sem anualização, sem % do CDI e sem Sharpe, e a série sai dos pares. Hoje todas as 75 séries têm cota em 25/09/2026.
 
-**Retorno anualizado.** `(1 + R)^(252 / n) − 1`. Só para as janelas de 12 e 24 meses, e para "desde o início" com `n ≥ 252`, e só com a série em dia. Por quê: anualizar uma janela curta multiplica o ruído. Um mês bom vira uma taxa anual que ninguém recebeu. O site não mostra o anualizado na janela de 12 meses: com 251 dias úteis na janela, ele sai um pouco acima do próprio retorno (IBX: 24,85 % contra 24,74 %) e confunde mais do que informa. O Sharpe de 12 meses continua usando a taxa anualizada.
+**Retorno anualizado.** `(1 + R)^(252 / n) − 1`. Só para as janelas de 12 e 24 meses, e para "desde o início" com `n ≥ 252`, e só com a série em dia. Por quê: anualizar uma janela curta multiplica o ruído. Um mês bom vira uma taxa anual que ninguém recebeu. O site não mostra o anualizado na janela de 12 meses: com 251 dias úteis na janela, ele sai um pouco acima do próprio retorno (IBX: 25,58 % contra 25,46 %) e confunde mais do que informa. O Sharpe de 12 meses continua usando a taxa anualizada.
 
 **Benchmark no período.**
 
 - CDI: `∏(1 + CDI_d / 100) − 1` sobre os dias de CDI entre a base e o fim.
-- IMA-B: número-índice no fim / número-índice na base − 1.
-- Ibovespa: pontos no fim / pontos na base − 1.
+- IMA-B, IMA-B 5, IMA-B 5+ e IRF-M: número-índice no fim / número-índice na base − 1.
+- Ibovespa e IBrX-100: pontos no fim / pontos na base − 1.
 - Em cada data vale o último nível publicado, com tolerância de 7 dias. A mesma tolerância vale para a contagem de dias de CDI: se o CDI parou de ser publicado há mais de 7 dias, `n`, o CDI do período e o retorno anualizado ficam vazios.
 
-**% do CDI.** `R_fundo / R_CDI` no mesmo período. É a razão dos retornos acumulados, não das taxas anualizadas. É calculado em **todas as janelas**, desde que a série esteja em dia e o CDI do período seja positivo (decidido em 29/09/2026). Por quê: toda lâmina de fundo mostra o % do CDI no mês e no ano, e com o CDI perto de 14 % ao ano a razão não explode nem em um mês. A versão anterior só publicava a partir de 12 meses, com medo da janela curta; o risco real é o CDI perto de zero, e o filtro de CDI positivo cobre esse caso. Em janela de poucos dias no começo do mês, o % do CDI de um fundo de ações ainda oscila muito: é o número certo, só que pouco informativo. Com retorno negativo, o % do CDI fica negativo: `54023112000197` tem −30,09 % do CDI em 12 meses.
+**% do CDI.** `R_fundo / R_CDI` no mesmo período. É a razão dos retornos acumulados, não das taxas anualizadas. É calculado em **todas as janelas**, desde que a série esteja em dia e o CDI do período seja positivo (decidido em 29/09/2026). Por quê: toda lâmina de fundo mostra o % do CDI no mês e no ano, e com o CDI perto de 14 % ao ano a razão não explode nem em um mês. A versão anterior só publicava a partir de 12 meses, com medo da janela curta; o risco real é o CDI perto de zero, e o filtro de CDI positivo cobre esse caso. Em janela de poucos dias no começo do mês, o % do CDI de um fundo de ações ainda oscila muito: é o número certo, só que pouco informativo. Com retorno negativo, o % do CDI fica negativo: `54023112000197` tem −28,51 % do CDI em 12 meses.
 
-**Excesso de retorno.** `R_fundo − R_benchmark`, diferença simples dos acumulados no período, em pontos percentuais. É calculado contra CDI, IMA-B, Ibovespa e IBrX-100. O site mostra o excesso sobre o **benchmark principal** da série (4.5) na tabela de fundos e no tile de retorno, e, na tabela de janelas, o excesso sobre o CDI e sobre o benchmark de mercado.
+**Excesso de retorno.** `R_fundo − R_benchmark`, diferença simples dos acumulados no período, em pontos percentuais. É calculado contra CDI, IMA-B, IMA-B 5, IMA-B 5+, IRF-M, Ibovespa e IBrX-100. O site mostra o excesso sobre o **benchmark principal** da série (4.5) na tabela de fundos e no tile de retorno, e, na tabela de janelas, o excesso sobre o CDI e sobre o benchmark de mercado.
 
 **Janela móvel de 12 meses.** Ficou fora desta versão (corte de 28/09/2026): nenhuma tela a usava, e em 29/09/2026 ela deixou de ser calculada e publicada.
 
@@ -238,14 +238,14 @@ Os indicadores de risco usam as janelas de 12 e 24 meses: os retornos diários c
 - É um Sharpe com o **CDI como taxa livre de risco**. O CDI é o que o investidor brasileiro ganha sem risco de mercado, e é o que um fundo DI entrega.
 - Leitura: quanto de retorno acima do CDI o fundo entregou por unidade de oscilação.
 - Cuidado: em fundo de volatilidade muito baixa, uma diferença pequena contra o CDI vira um Sharpe grande em módulo.
-- **Escondido no site para série "DI de um dia"** (decidido em 29/09/2026). O Gold (`10756556000166`) rendeu 0,29 p.p. abaixo do CDI com vol de 0,11 % e teria Sharpe de −2,66; o Veículo Especial DC (`54514671000108`) teria 16,24. Nos dois casos o número é ruído. O pipeline continua calculando e publicando o Sharpe; a tabela de fundos e o tile da página do fundo mostram um traço com o motivo. Foi a opção mais simples: a mesma marca "DI de um dia" que já tira o beta e o tracking error (4.5).
+- **Escondido no site para série "DI de um dia"** (decidido em 29/09/2026). O Gold (`10756556000166`) rendeu 0,30 p.p. abaixo do CDI com vol de 0,11 % e teria Sharpe de −2,76; o Veículo Especial DC (`54514671000108`) teria 16,24. Nos dois casos o número é ruído. O pipeline continua calculando e publicando o Sharpe; a tabela de fundos e o tile da página do fundo mostram um traço com o motivo. Foi a opção mais simples: a mesma marca "DI de um dia" que já tira o beta e o tracking error (4.5).
 
-**Beta e tracking error.** Só contra o benchmark de mercado da série: IMA-B para Renda Fixa, Ibovespa para Ações, IBrX-100 para as ações que declaram IBrX. Multimercado não tem.
+**Beta e tracking error.** Só contra o benchmark de mercado da série (4.5): o índice declarado no cadastro, quando o monitor o coleta; senão IMA-B para Renda Fixa e Ibovespa para Ações. Multimercado só tem quando declara um índice coletado (Iporã PG Inflação e Igaraté Long Biased IU, IMA-B 5).
 
 - `beta = cov(r_fundo, r_bench) / var(r_bench)`, com os retornos do benchmark medidos entre as mesmas datas dos informes do fundo.
 - `tracking error = desvio-padrão amostral(r_fundo − r_bench) × √252`.
 - Mínimo de 60 observações, como a volatilidade.
-- **Nunca para série "DI de um dia"** (decidido em 28/09/2026). 24 das 45 séries de Renda Fixa declaram "DI de um dia" como indicador de desempenho. Um fundo DI não tenta seguir o IMA-B; o beta dele contra o IMA-B pareceria informação e seria ruído. Foi escolhida a versão mais simples por prazo, em vez de um mapa de benchmark por fundo.
+- **Nunca para série "DI de um dia"** (decidido em 28/09/2026). 24 das 45 séries de Renda Fixa declaram "DI de um dia" como indicador de desempenho. Um fundo DI não tenta seguir o IMA-B; o beta dele contra o IMA-B pareceria informação e seria ruído. A exceção DI vale antes do mapa do índice declarado (4.5).
 
 **Métricas auxiliares.** Fração de dias positivos, melhor dia e pior dia, com a data de cada um.
 
@@ -272,29 +272,62 @@ resíduo = PL_fim − PL_início − captação_líquida − PL_início × r_mê
 
 - PL: soma do último PL de cada série `(CNPJ, subclasse)` até o dia de referência. A linha da classe sai da soma quando alguma subclasse do mesmo CNPJ já informou no período (a janela inteira no total, o mês no gráfico mensal), para não contar o PL duas vezes.
 - Captação: linhas da classe até a primeira linha de subclasse do CNPJ, e as linhas das subclasses depois.
+- **FIC e master contam duas vezes.** A soma é por classe, então o FIC da casa e o fundo da casa em que ele investe entram os dois. Caso certo: o Incentivado em Infraestrutura (`54023112000197`, R$ 49.426.143,36, 1 cotista) e o FIC dele (`53248945000193`, R$ 49.432.920,02, 1 cotista). Teto: as classes "em cotas" monitoradas somam cerca de R$ 1,66 bi (Multiestratégia R$ 823,6 mi, Multiestratégia Moderado R$ 355,5 mi, IU 95/5 R$ 149,6 mi, Data Alvo 2030, 2040 e 2050, Inflação Longa FIC, Inflação Curta FIC, Igaraté FIC e Incentivado em Infraestrutura FIC), cerca de 11 % do PL não exclusivo sem estruturais, se todas investissem só em fundos monitorados da casa. Separar pede a carteira (CDA) de cada FIC; é próximo passo (7). O site avisa no tile "Da gestora" e na Como funciona.
 
-| Escopo | Classes | PL em 24/09/2026 | Captação em 12 meses |
+| Escopo | Classes | PL em 25/09/2026 | Captação em 12 meses |
 | --- | --- | --- | --- |
+| Não exclusivas sem estruturais | 58 | R$ 14,8 bi | R$ 1,9 bi |
 | Não exclusivas | 69 | R$ 27,1 bi | R$ 9,2 bi |
-| Toda a gestora | 246 | R$ 93,3 bi | R$ 13,5 bi |
+| Toda a gestora | 246 | R$ 93,4 bi | R$ 13,4 bi |
 
 ### 4.5 Benchmark por série
 
-| Classificação CVM | Comparado com | Benchmark de mercado (beta e tracking error) | Benchmark principal |
+**Benchmark declarado** (decidido em 29/09/2026). O benchmark de mercado é o índice que a série declara no cadastro (`Indicador_Desempenho`), quando o monitor o coleta (`DECLARED_BENCHMARKS`, em `calc/benchmarks.py`):
+
+| `Indicador_Desempenho` | Benchmark de mercado |
+| --- | --- |
+| "IBrX" | IBrX-100 |
+| "IRF-M" | IRF-M |
+| "Índice de Mercado Andima todas NTN-B" | IMA-B |
+| "Índice de Mercado Andima NTN-B até 5 anos" | IMA-B 5 |
+| "Índice de Mercado Andima NTN-B mais de 5 anos" | IMA-B 5+ |
+
+Quando o declarado não está no mapa ("OUTROS", "Não se aplica", IPCA), vale a regra pela classificação CVM. A regra inteira:
+
+| Série | Comparado com | Benchmark de mercado (beta e tracking error) | Benchmark principal |
 | --- | --- | --- | --- |
-| Renda Fixa | CDI e IMA-B | IMA-B | IMA-B |
-| Multimercado | CDI | — | CDI |
-| Ações | CDI e Ibovespa | Ibovespa | Ibovespa |
-| Ações com `Indicador_Desempenho` = "IBrX" | CDI e IBrX-100 | IBrX-100 | IBrX-100 |
 | Qualquer uma com `Indicador_Desempenho` = "DI de um dia" | CDI | — | CDI |
+| Qualquer uma com índice declarado no mapa | CDI e o índice declarado | O índice declarado | O índice declarado |
+| Renda Fixa, sem índice no mapa | CDI e IMA-B | IMA-B | IMA-B |
+| Multimercado, sem índice no mapa | CDI | — | CDI |
+| Ações, sem índice no mapa | CDI e Ibovespa | Ibovespa | Ibovespa |
 
-**Benchmark principal** (decidido em 29/09/2026). É o benchmark de mercado quando a série tem um, e o CDI quando não tem. É contra ele que o site diz se o fundo "bateu o benchmark" (excesso de 12 meses em p.p.). Por quê: comparar todo fundo com o CDI dizia que fundos de inflação e de ações perderam do CDI, o que é verdade mas não é o mandato deles. Na rodada de 24/09/2026, **6 de 36** séries de Público Geral (sem estruturais) bateram o próprio benchmark em 12 meses: Inflação Curta (+1,24 p.p. sobre o IMA-B), Dinâmico CDI (+0,50), Inflação Curta FIC (+0,50), Dinâmico Institucional (+0,22), Crédito Privado IU Seleção (+0,05) e Inflação (+0,05). Contra o CDI eram 5 de 36. O excesso mediano é −0,72 p.p., e 12 das 36 ficam a menos de 0,5 p.p. do benchmark, perto do que custa a taxa de administração. A correção é de método: a leitura sobre a gestora muda pouco.
+A ordem é a da tabela: "DI de um dia" primeiro, depois o mapa, depois a classificação. IMA-B 5, IMA-B 5+ e IRF-M já vinham no mesmo arquivo da ANBIMA que o IMA-B; não há fonte nova.
 
-Em Público Geral, todos os fundos de crédito de Renda Fixa declaram "DI de um dia", então nenhum deles é comparado com o IMA-B. Os de Renda Fixa comparados com o IMA-B são os de inflação, o pré-fixado e os incentivados.
+**Por quê:** a manchete anterior ("6 de 36") incluía a Inflação Curta FIC (`12682783000110`), que declara IMA-B 5, com +0,47 p.p. sobre o IMA-B; contra o IMA-B 5 ela perde 1,12 p.p.
 
-- A regra é por classificação porque o `Indicador_Desempenho` do cadastro não é uniforme. Nas 75 séries: 32 "DI de um dia", 15 "OUTROS", 14 "Não se aplica", 4 IPCA, 4 IMA-B 5, 3 IBrX, e um cada de IMA-B 5+, IMA-B e IRF-M.
-- **IBrX-100** (29/09/2026): IBX (`06224719000192`), IBX FIFE (`34798905000170`) e Dividendos (`08279304000141-9WCV01767643284`) declaram IBrX. A B3 publica o IBrX-100 no mesmo endpoint do Ibovespa, então ele passou a ser coletado. Efeito em 12 meses: o IBX fica em −0,42 p.p. contra o IBrX-100, em vez de −0,84 p.p. contra o Ibovespa.
-- A exceção DI é a versão mínima da decisão de 28/09/2026 (ver 4.3). Ela afeta 24 séries de Renda Fixa e 8 Multimercado; nestas últimas nada muda, porque Multimercado já é comparado só com o CDI.
+Séries que mudaram de benchmark (excesso de 12 meses, antes → agora):
+
+| Série | Antes | Agora |
+| --- | --- | --- |
+| Inflação Curta FIC `12682783000110` | IMA-B +0,47 p.p. | IMA-B 5 −1,12 p.p. |
+| Inflação Longa FIC `07400556000114` | IMA-B −2,52 p.p. | IMA-B 5+ −1,08 p.p. |
+| Pré-Fixado `19418031000195` | IMA-B −1,40 p.p. | IRF-M −1,53 p.p. |
+| Iporã PG Inflação `44212301000154` | CDI −2,41 p.p. | IMA-B 5 −2,36 p.p. |
+| VC `53602540000101` | IMA-B −4,84 p.p. | IMA-B 5 −6,44 p.p. |
+| Igaraté Long Biased IU `64026956000145-QFJB91787329596` | CDI | IMA-B 5 (sem 12 meses) |
+
+Índices em 12 meses (25/09/2025 a 25/09/2026): IMA-B 12,84 %, IMA-B 5 14,44 %, IMA-B 5+ 11,40 %, IRF-M 12,97 %, Ibovespa 26,27 %, IBrX-100 25,85 %, CDI 14,49 %.
+
+**Benchmark principal** (decidido em 29/09/2026). É o benchmark de mercado quando a série tem um, e o CDI quando não tem. É contra ele que o site diz se o fundo "bateu o benchmark" (excesso de 12 meses em p.p.). Por quê: comparar todo fundo com o CDI dizia que fundos de inflação e de ações perderam do CDI, o que é verdade mas não é o mandato deles. Na rodada com dados até 25/09/2026, **5 de 36** séries de Público Geral (sem estruturais, com 12 meses) bateram o próprio benchmark em 12 meses: Inflação Curta (+1,22 p.p. sobre o IMA-B), Dinâmico CDI (+0,50 sobre o CDI), Dinâmico Institucional (+0,22 sobre o CDI), Crédito Privado IU Seleção (+0,07 sobre o CDI) e Inflação (+0,07 sobre o IMA-B). Contra o CDI também são 5 de 36. O excesso mediano é −0,66 p.p., e 11 das 36 ficam entre 0 e −0,5 p.p. do benchmark, perto do que custa a taxa de administração. A correção é de método: a leitura sobre a gestora muda pouco.
+
+**Limitação que fica:** quem declara "OUTROS" segue a classificação. A Inflação Curta (`10922432000103`, comparada com o IMA-B, +1,22 p.p.) e o Igaraté Long Biased IMA B-5 (`54198519000155-UBQKC1766775210`, comparado com o Ibovespa, −12,21 p.p.) são de IMA-B 5 pelo nome; contra o IMA-B 5 os dois perdem 0,38 p.p. Com eles no IMA-B 5, a manchete seria 4 de 36.
+
+Em Público Geral, todos os fundos de crédito de Renda Fixa declaram "DI de um dia", então nenhum deles é comparado com um índice da ANBIMA. Os de Renda Fixa comparados com um IMA são os de inflação, o VC e os incentivados; o Pré-Fixado é comparado com o IRF-M.
+
+- O mapa só cobre os índices que o monitor coleta, porque o `Indicador_Desempenho` do cadastro não é uniforme. Nas 75 séries: 32 "DI de um dia", 15 "OUTROS", 14 "Não se aplica", 4 IPCA, 4 IMA-B 5, 3 IBrX, e um cada de IMA-B 5+, IMA-B e IRF-M. O IPCA não é coletado.
+- **IBrX-100** (29/09/2026): IBX (`06224719000192`), IBX FIFE (`34798905000170`) e Dividendos (`08279304000141-9WCV01767643284`) declaram IBrX. A B3 publica o IBrX-100 no mesmo endpoint do Ibovespa, então ele passou a ser coletado. Efeito em 12 meses: o IBX fica em −0,39 p.p. contra o IBrX-100, em vez de −0,81 p.p. contra o Ibovespa.
+- A exceção DI é a versão mínima da decisão de 28/09/2026 (ver 4.3). Ela afeta 24 séries de Renda Fixa e 8 Multimercado; nestas últimas nada muda, porque Multimercado sem índice declarado já é comparado só com o CDI.
 - O cadastro do fundo no site mostra o indicador declarado e, ao lado, com o que ele está sendo comparado.
 
 ### 4.6 Pares
@@ -311,18 +344,18 @@ Implementado em 26–28/09/2026.
 - Volatilidade e drawdown de 12 meses calculados (a volatilidade pede pelo menos 60 observações).
 - Última cota a no máximo 7 dias do dia de referência (4.2).
 - PL acima de R$ 50 milhões. Por quê: tira fundos pequenos demais para serem alternativa real e mais sujeitos a cota ruidosa (fundo começando ou encerrando).
-- Resultado: **1.649 elegíveis**. Saíram 387 sem 12 meses, 1.352 com PL até R$ 50 milhões e 4 paradas há mais de 7 dias.
+- Resultado: **1.652 elegíveis**. Saíram 387 sem 12 meses, 1.350 com PL até R$ 50 milhões e 3 paradas há mais de 7 dias.
 
 **O fundo avaliado.**
 
 - A própria classe e as subclasses irmãs (mesmo CNPJ) ficam fora do grupo: o fundo não é par de si mesmo.
-- O limite de PL vale para os pares, não para o fundo avaliado. `54023112000197`, com R$ 49,4 mi, tem posição entre 359 pares. O fundo avaliado precisa das três métricas de 12 meses e de estar em dia.
+- O limite de PL vale para os pares, não para o fundo avaliado. `54023112000197`, com R$ 49,4 mi, tem posição entre 361 pares. O fundo avaliado precisa das três métricas de 12 meses e de estar em dia.
 - A posição e o percentil só são publicados com **pelo menos 5 pares**.
 - 36 das 44 séries de Público Geral têm posição; as outras 8 ainda não têm 12 meses de série.
 
 **Percentil.**
 
-A tabela de fundos mostra o percentil do retorno **e** o da volatilidade lado a lado ("P71 ret · P2 vol · 358"), decidido em 29/09/2026. Por quê: os grupos ANBIMA são heterogêneos. "Multimercados Livre" tem 359 pares com vol de 12 meses de 0,6 % (P10) a 13,8 % (P90); "Renda Fixa Duração Livre Crédito Livre" tem 471 pares com vol de 0,13 % a 4,9 %. O Dinâmico Institucional (`52163627000167`), com vol de 0,20 %, fica em P71 de retorno nesse grupo, o que sozinho quase não informa; ao lado de "P2 vol" a leitura fica clara: rendeu mais que 71 % dos pares oscilando menos que 98 % deles. Foram descartados o percentil do Sharpe, que herda o ruído do Sharpe em fundo de vol baixa (o sinal de uma diferença mínima contra o CDI joga o fundo para um extremo: o mesmo Dinâmico Institucional iria a P94, o Multiestratégia de P62 de retorno a P32), e pares por faixa de vol, que encolhe os grupos e acrescenta um limiar.
+A tabela de fundos mostra o percentil do retorno **e** o da volatilidade lado a lado ("P68 ret · P2 vol · 360"), decidido em 29/09/2026. Por quê: os grupos ANBIMA são heterogêneos. "Multimercados Livre" tem 361 pares elegíveis com vol de 12 meses de 0,6 % (P10) a 13,7 % (P90); "Renda Fixa Duração Livre Crédito Livre" tem 471 pares com vol de 0,13 % a 4,9 %. O Dinâmico Institucional (`52163627000167`), com vol de 0,20 %, fica em P68 de retorno no grupo "Multimercados Livre", o que sozinho quase não informa; ao lado de "P2 vol" a leitura fica clara: rendeu mais que 68 % dos pares oscilando menos que 98 % deles. Foram descartados o percentil do Sharpe, que herda o ruído do Sharpe em fundo de vol baixa (o sinal de uma diferença mínima contra o CDI joga o fundo para um extremo: o mesmo Dinâmico Institucional iria a P94, o Multiestratégia (`15578409000167`) de P58 de retorno a P30), e pares por faixa de vol, que encolhe os grupos e acrescenta um limiar.
 
 ```
 percentil = (pares com valor abaixo + ½ × pares com valor igual) / número de pares
@@ -346,7 +379,7 @@ Os pares usam 24 meses de informe (18 MB de Parquet).
 - a linha com cota ≤ 0 sai de todo o cálculo (regra 5 e 4.1);
 - na duplicidade, vale a linha `CLASSES - FIF` (regra 7);
 - as linhas depois do dia de referência ficam de fora do cálculo e das regras até o dia completar (4.1);
-- a série sem 12 meses fica fora dos pares e sem % do CDI (regra 6);
+- a série sem 12 meses fica fora dos pares e sem % do CDI de 12 meses (regra 6);
 - a série parada há mais de 7 dias perde anualização, % do CDI e Sharpe e sai dos pares (4.2).
 
 **Severidades.** Alta: dado claramente errado (linha zerada) ou fonte tão atrasada que os números do site são de dias antes (regra 8). Média: pede investigação. Baixa: falha pequena. Informativo: real, mas explicado.
@@ -360,14 +393,14 @@ Os pares usam 24 meses de informe (18 MB de Parquet).
 | 3 | Cota repetida (`repeated_quota`) | Mesma cota em informes seguidos | 3 ou mais informes | Média | Fundo parado ou dado congelado. Perguntar ao administrador. |
 | 4 | PL sem explicação (`unexplained_net_assets`) | Variação mensal do PL que captação e rentabilidade não explicam | `abs(resíduo) > 1 %` do PL do início do mês | Média | Procurar amortização, distribuição, incorporação ou fluxo entre veículos. |
 | 5 | Valores zerados (`zero_values`) | Linha publicada com cota, PL ou cotistas zerados | cota ≤ 0, PL ≤ 0 ou 0 cotistas | Alta | Tratar como erro de envio. A linha com cota ≤ 0 sai de todo o cálculo e deixa um dia sem informe (regra 1). |
-| 6 | Histórico curto (`short_history`) | Série sem retorno de 12 meses | Janela de 12 meses vazia | Informativo | Fica fora dos pares e do ranking contra o CDI. Continua na tabela e nos destaques de captação, com a captação marcada como parcial. |
+| 6 | Histórico curto (`short_history`) | Série sem retorno de 12 meses | Janela de 12 meses vazia | Informativo | Fica fora dos pares e do destaque contra o próprio benchmark, e sem % do CDI de 12 meses (o das janelas curtas existe). Continua na tabela e nos destaques de captação, com a captação marcada como parcial. |
 | 7 | Informe duplicado (`duplicate_report`) | Mesma série e dia em mais de uma linha, com valores diferentes | Qualquer diferença em cota, PL, patrimônio total, captação, resgate ou cotistas | Média | Vale `CLASSES - FIF`. O alerta guarda quais campos divergiram. |
-| 8 | Fonte atrasada (`stale_source`) | Última data da fonte longe do último dia de semana antes da execução | Atraso em dias de semana, sem descontar feriados. Tolerância: informe CVM 2; CDI, IMA-B e Ibovespa 1 | Média acima da tolerância; alta acima da tolerância + 3 ou sem nenhuma data | Não confiar no dia: os números são de antes. Ver se o portal está no ar. |
+| 8 | Fonte atrasada (`stale_source`) | Última data da fonte longe do último dia de semana antes da execução | Atraso em dias de semana, sem descontar feriados. Tolerância: informe CVM 2; CDI, IMA-B, Ibovespa e IBrX-100 1 | Média acima da tolerância; alta acima da tolerância + 3 ou sem nenhuma data | Não confiar no dia: os números são de antes. Ver se o portal está no ar. |
 | 9 | Cadastro divergente (`registry_mismatch`) | Três casos: série no informe (CNPJs da gestora) que não está no cadastro; série monitorada do cadastro sem nenhum informe; série no informe que está no cadastro da gestora mas não entre as séries ativas (por exemplo, fora de funcionamento normal) | Qualquer caso | Média | Ver se a classe mudou de situação ou criou subclasse. |
 
 No salto de cota, o `threshold` publicado é o limite que disparou: 3 % no critério absoluto de Renda Fixa; senão o maior entre o piso de 0,1 % e `5σ√k`. O alerta também publica o `deviation`, o desvio `r − k × média` que é comparado com o limite. O site mostra o desvio ao lado do limite e o retorno do dia como informação secundária: "retorno −0,20 %, limite 0,23 %" parecia um valor abaixo do limite, quando o que passou foi o desvio de −0,25 %.
 
-**Contagem na rodada de 24/09/2026** (32.979 pares série × dia útil verificados; 1 alta, 81 médias, 1 baixa, 65 informativos, 148 no total):
+**Contagem na rodada com dados até 25/09/2026** (33.054 pares série × dia útil verificados; 1 alta, 81 médias, 1 baixa, 65 informativos, 148 no total):
 
 | Regra | Alertas |
 | --- | --- |
@@ -398,10 +431,10 @@ No salto de cota, o `threshold` publicado é o limite que disparou: 3 % no crit�
 - **A regra.** Para cada série, olha-se a correlação dos 60 retornos anteriores com o Ibovespa e com o IMA-B e fica o índice de maior correlação em módulo. O salto vira informativo quando, no mesmo dia, esse índice teve um movimento acima de 2,5 desvios-padrão do próprio padrão (60 retornos anteriores do índice), no mesmo sentido do desvio do fundo, e a correlação é de pelo menos 0,5. A fração de pares continua como segunda via, para os fundos sem índice. O alerta leva a marca `index ibov` ou `index ima_b`.
 - **Em uma frase:** o salto é de mercado quando o índice que mais se parece com o fundo também saiu do padrão, no mesmo dia e no mesmo sentido.
 - **Efeito na rodada de 24/09/2026:** de 72 para 56 saltos médios, de 35 para 51 informativos. Os 16 que mudaram: 18/12/2024 (7 séries: Data Alvo 2050 e 2060 e os cinco Igaraté, com o Ibovespa a −3,30σ), 04/04/2025 (os cinco Igaraté, −2,96σ), 13/03/2026 (IPCA Dinâmico e Iporã PG Inflação, IMA-B a −4,86σ) e 16/03/2026 (Inflação Longa e Inflação Longa FIC, IMA-B a +5,12σ, correlação 0,997).
-- **O que não mudou, de propósito.** O evento de crédito de 09/12/2024 continua médio nas 13 séries: nesse dia o Ibovespa subiu 1,00 % (+1,32σ) e o IMA-B caiu 0,24 % (−0,65σ), e os fundos de crédito têm correlação baixa com os dois. O 05/12/2025 continua informativo.
+- **O que não mudou, de propósito.** O evento de crédito de 09/12/2024 continua médio nas 13 séries: nesse dia o Ibovespa subiu 1,00 % (+1,32σ) e o IMA-B caiu 0,24 % (−0,65σ), nenhum dos dois fora do padrão. Não é falta de correlação: o Plus (`05755769000133`) tem ρ 0,82 com o IMA-B e só continuou isolado porque o IMA-B andou −0,65σ. Foi um dia de crédito, e nenhum índice coletado mede crédito; falta um índice de crédito (IDA). O 05/12/2025 continua informativo.
 - **Por que 2,5σ e não 3σ.** Com 3σ, o 04/04/2025 ficaria de fora por 0,04σ (o Ibovespa caiu 2,96σ). Com 2σ o resultado é o mesmo de 2,5σ. O índice é uma condição de confirmação: o fundo já teve um desvio de 5σ, e o índice só precisa ter tido um dia incomum (2,5σ é cerca de um dia em 80). É uma calibração feita olhando os dados desta janela, e está dita como tal.
 - **Por que correlação de 0,5.** Com 0,3, o Veículo Especial no Exterior 2 (correlação de 0,34 com o Ibovespa) passaria a ter o 09/04/2025 explicado pelo Ibovespa, quando o que mexeu foi a bolsa americana.
-- **Alternativas descartadas.** Aplicar o teste ao resíduo contra o índice (`r − β × r_índice`) piorou: 103 saltos médios, porque em fundo com correlação alta o desvio do resíduo fica minúsculo e surgem alertas novos. Medir a fração de pares por classificação ANBIMA não mudou a contagem (72) e transformava o 09/12/2024 do Crédito Privado em informativo, porque o grupo ANBIMA dele tem 16 pares.
+- **Alternativas descartadas.** Aplicar o teste ao resíduo contra o índice (`r − β × r_índice`) piorou: 103 saltos médios, porque em fundo com correlação alta o desvio do resíduo fica minúsculo e surgem alertas novos. Medir a fração de pares por classificação ANBIMA não mudou a contagem (72) e transformava o 09/12/2024 do Crédito Privado em informativo pelo motivo errado: no grupo "Renda Fixa Duração Baixa Crédito Livre", 3 dos 4 saltos do dia eram da própria gestora (o Plus e o Crédito Privado contado duas vezes, pelas subclasses herdadas `07900255000150-BQMVJ1750171627` e `07900255000150-FR33D1750172064`) e o quarto era o feeder `32835611000146`. A fração estaria medindo a própria casa.
 - **Desvio robusto, testado e descartado.** O desvio-padrão móvel inclui os saltos anteriores, então um salto grande esconde os seguintes por três meses. Trocar média e desvio por mediana e MAD (desvio absoluto mediano × 1,4826) levaria a regra de 107 para 322 disparos: o retorno diário dos fundos de crédito é muito concentrado e a MAD fica minúscula. Ficou a média e o desvio-padrão.
 
 **Classe sem subclasse operacional** (28/09/2026): monitorada como a própria classe (ver 3.5).
@@ -410,14 +443,14 @@ No salto de cota, o `threshold` publicado é o limite que disparou: 3 % no crit�
 
 ### 5.2 Exemplos reais
 
-- **Evento de crédito da casa, 09/12/2024.** 13 séries de crédito da gestora caíram no mesmo dia, entre −0,11 % e −0,53 %, em fundos cujo retorno médio nos 60 dias anteriores era de +0,04 % ao dia. São 10 CNPJs: três classes (`07900255000150`, `35609382000130` e `44917374000141`) ainda não tinham subclasses, e a cota de cada uma aparece nas duas subclasses que a herdam. Na mesma data, só 2,3 % dos fundos de Renda Fixa do universo de pares saltaram. Não foi mercado: foi algo comum às carteiras da gestora, provavelmente a remarcação de um mesmo emissor. Ficou como alerta médio. Séries: `05755769000133`, `07900255000150-BQMVJ1750171627`, `07900255000150-FR33D1750172064`, `32760042000117`, `32760072000123`, `34081211000118`, `35609382000130-A8AAW1750173152`, `35609382000130-ZN9EI1750172960`, `36521750000156`, `44917374000141-UYXKV1750167974`, `44917374000141-WJPUK1750168728`, `45444067000153`, `48953198000154`.
+- **Evento de crédito, 09/12/2024.** 13 séries de crédito da gestora caíram no mesmo dia, entre −0,11 % e −0,53 %, em fundos cujo retorno médio nos 60 dias anteriores era de +0,04 % ao dia. São 10 CNPJs: três classes (`07900255000150`, `35609382000130` e `44917374000141`) ainda não tinham subclasses, e a cota de cada uma aparece nas duas subclasses que a herdam. O Ibovespa e o IMA-B não explicam o dia (5.1), e na mesma data só 2,3 % dos fundos de Renda Fixa do universo de pares saltaram. Mas não foi só da casa: caíram também fundos de crédito e infraestrutura de outras gestoras, como JGP Deb Incent Juros Reais `41594333000173` (Leto) −1,50 %, Premium Institucional `37780270000172` (Veritas) −2,07 % e Tagus `16599959000125` −0,51 %, e ainda Régia `53828295000155`, XP Corporate Top `04621721000170`, Principal Claritas `11447136000160` e Itaú Active Fix `17051205000107`. Nos fundos ANBIMA "Crédito Livre" de outras gestoras, 2,83 % saltaram nesse dia, o 10.º maior dia entre 459 (mediana 0,15 %). O feeder `32835611000146` (ICATU VANGUARDA CRÉDITO PRIVADO LONGO PRAZO IU FIF DA CIC, gestor Itaú no cadastro) caiu −0,21 % junto. A fração de pares por classificação CVM não enxerga crédito, e o índice também não: falta um índice de crédito (IDA). Leitura provável: remarcação de um emissor presente em várias carteiras. Ficou como alerta médio, tratado como `explained` (5.3). Séries: `05755769000133`, `07900255000150-BQMVJ1750171627`, `07900255000150-FR33D1750172064`, `32760042000117`, `32760072000123`, `34081211000118`, `35609382000130-A8AAW1750173152`, `35609382000130-ZN9EI1750172960`, `36521750000156`, `44917374000141-UYXKV1750167974`, `44917374000141-WJPUK1750168728`, `45444067000153`, `48953198000154`.
 - **Dia de mercado, 05/12/2025.** 72 % dos fundos de ações, 32 % dos multimercados e 16 % dos de renda fixa do universo de pares tiveram salto. O Dividendos (`08279304000141-9WCV01767643284`) caiu −4,53 % e o IBX (`06224719000192`) −4,29 %. Os 24 alertas do dia ficaram informativos. Em 13/03/2026, 12 % da renda fixa saltou e o IMA-B caiu 4,86σ: os 13 alertas do dia ficaram informativos (os dois últimos, IPCA Dinâmico e Iporã PG Inflação, pela regra do índice).
 - **Dia de mercado que a regra antiga não via, 18/12/2024.** Ibovespa −3,15 %. Sete séries de multimercado e ações ligadas à bolsa apareciam como queda isolada; pela regra do índice (5.1), viraram informativas. O caso completo está em `findings.md`, item 13.
 - **Distribuição informada como resgate: `54023112000197`** (Incentivado em Infraestrutura, 1 cotista, R$ 49,4 mi). O informe traz resgate de cerca de R$ 505 mil todo mês, cerca de 1 % do PL, mas o PL não cai esse valor. O resíduo fica entre +0,97 % e +1,03 % em todos os 24 meses; 11 passam do limite. Leitura provável, **a confirmar**: pagamento de rendimentos que sai da cota e aparece como resgate. O alerta de PL é legítimo.
 - **Duplicidade de 24/04/2025.** Duas classes, `07900255000150` e `44917374000141`, ainda sem subclasses, têm cota, PL e resgates diferentes entre a linha `FI` e a `CLASSES - FIF`. Cada linha aparece como alerta nas duas subclasses que herdam a cota: `07900255000150-BQMVJ1750171627`, `07900255000150-FR33D1750172064`, `44917374000141-UYXKV1750167974` e `44917374000141-WJPUK1750168728`. Fora das monitoradas, o CNPJ `03537494000136` em 06/11/2024 tem captação de R$ 9.082,08 numa linha e R$ 64.743,05 na outra.
 - **Linha zerada de 16/03/2026.** `34793170000192-BNAX91750170440` informou cota 0, PL 0 e 0 cotistas, no meio de uma série com cerca de 1.470 cotistas e R$ 119 mi. A linha sai de todo o cálculo e gera dois alertas: valores zerados (alta) e o dia sem informe que ela deixa (baixa).
 - **Subclasse que não herda.** `58327943000103-NANFG1779473395`, pela regra dos 7 dias (ver 4.1).
-- **Fonte atrasada, 27/09/2026.** Com o portal da CVM fora do ar, a última data do informe estava em 22/09/2026: 3 dias de semana de atraso (23, 24 e 25/09) contra a tolerância de 2. Foi numa execução local, não publicada. Na rodada de 28/09/2026, com o portal de volta, não há alerta.
+- **Fonte atrasada, 27/09/2026.** Numa execução local, não publicada, com o portal da CVM fora do ar, a regra 8 marcou o informe que já estava em disco: última data em 22/09/2026, 3 dias de semana de atraso (23, 24 e 25/09) contra a tolerância de 2. A queda do portal em si ela não pega: sem resposta, a coleta falha (ver 2.2). Na rodada de 28/09/2026, com o portal de volta, não há alerta.
 
 ### 5.3 Tratativas
 
@@ -433,7 +466,7 @@ Tratativas registradas em 29/09/2026, depois de ler um por um os alertas abertos
 
 | Regra | Série | Período | Desfecho | Alertas |
 | --- | --- | --- | --- | --- |
-| Salto de cota | todas | 09/12/2024 | `explained`: evento de crédito da casa (5.2) | 13 |
+| Salto de cota | todas | 09/12/2024 | `explained`: dia de crédito no mercado, com 13 séries da casa que o Ibovespa e o IMA-B não explicam; fundos de crédito e infraestrutura de outras gestoras caíram no mesmo dia (5.2) | 13 |
 | Salto de cota | `55298739000113` (Veículo Especial no Exterior 2) | 13/03 a 09/04/2025 e 10/10/2025 | `explained`: o S&P 500 mexeu no mesmo dia e no mesmo sentido (FRED `SP500`; ρ 0,65 com o fundo) | 9 |
 | Salto de cota | `44212682000171` (FOF Ações Globais USD) | 03/04 a 09/04/2025 | `explained`: S&P 500 −4,84 % e +9,52 % | 2 |
 | Salto de cota | `54023112000197` e `53248945000193` (incentivados) | 4 datas | `limitation`: queda de cerca de 1 % da cota no dia do pagamento mensal, provável distribuição de rendimentos, a confirmar com a lâmina | 4 |
@@ -444,24 +477,24 @@ Tratativas registradas em 29/09/2026, depois de ler um por um os alertas abertos
 | Dia sem informe | `34793170000192-BNAX91750170440` | 16/03/2026 | `source_error`: consequência da linha zerada | 1 |
 | Informe duplicado | todas | 24/04/2025 | `source_error`: `FI` e `CLASSES - FIF` com valores diferentes | 4 |
 
-Na rodada de 24/09/2026 são 53 alertas tratados dos 148 (24 explicados, 6 erros da fonte, 23 limitações) e 65 informativos. Ficam **30 abertos, todos médios**: 28 saltos de cota e 2 PL sem explicação (FOF Global BRL em mar/2025 e Credit Plus K em set/2026). Entre os abertos há três dias com várias séries de crédito da casa caindo juntas, como no 09/12/2024: 18 e 19/03/2026 e 13/08/2026. Ficam abertos, a investigar com a carteira. Só 4 dos 30 abertos são dos últimos 30 dias.
+Na rodada com dados até 25/09/2026 são 53 alertas tratados dos 148 (24 explicados, 6 erros da fonte, 23 limitações) e 65 informativos. Ficam **30 abertos, todos médios**: 28 saltos de cota e 2 PL sem explicação (FOF Global BRL em mar/2025 e Credit Plus K em set/2026). Entre os abertos há três dias com séries de crédito da casa caindo: 18 e 19/03/2026 e 13/08/2026. São dias de crédito em várias gestoras (19/03/2026 é o dia do Copom); o 18/03/2026 tem uma série só, o CDI IU (`62571624000116`). Ficam abertos, a investigar com a carteira. Só 4 dos 30 abertos são dos últimos 30 dias.
 
 **Taxa de acerto das regras** (a resposta para "como você sabe que o limiar está certo?"):
 
 | Regra | Alertas | Fato real ou erro da fonte | Mercado | Limitação do informe ou da regra | Sem leitura |
 | --- | --- | --- | --- | --- | --- |
-| Salto de cota | 107 | 13 (evento de crédito) | 62 (51 pela regra, 11 por mercado global) | 4 (incentivados) | 28 |
+| Salto de cota | 107 | 13 (evento de crédito real, de mercado, com 13 séries da casa) | 62 (51 pela regra, 11 por mercado global) | 4 (incentivados) | 28 |
 | PL sem explicação | 21 | 0 | — | 19 | 2 |
 | Valores zerados, dia sem informe, informe duplicado | 6 | 6 | — | 0 | 0 |
 
-Dos 56 saltos médios, metade tem leitura. A regra de PL quase só pega limitação da própria fórmula (fluxo no meio do mês, distribuição como resgate): é o sinal de que a decomposição diária (`PRODUCTION.md`) vale mais que ajustar o limiar de 1 %.
+Dos 56 saltos médios, metade tem leitura. Os 51 de "mercado pela regra" foram rotulados pela própria regra, não por leitura: a precisão medida lendo alerta por alerta é sobre os 56 saltos médios. A regra de PL quase só pega limitação da própria fórmula (fluxo no meio do mês, distribuição como resgate): é o sinal de que a decomposição diária (`PRODUCTION.md`) vale mais que ajustar o limiar de 1 %.
 
 ## 6. O que cada gráfico e tabela mostra
 
 Regras que valem para todas as telas:
 
 - **Um eixo por gráfico.** Fundo e benchmark ficam na mesma unidade (retorno acumulado com base 100), para a comparação ser direta.
-- **Cor por papel, com paleta curta.** São cinco cores de série, reaproveitadas entre papéis. O que é fixo: cada benchmark tem sempre a mesma cor (CDI, IMA-B, Ibovespa), cada classificação também (Renda Fixa, Multimercado, Ações), e o fundo tem a mesma cor no retorno acumulado e no ponto da faixa de pares. O que não é: a mesma cor serve a papéis diferentes. O CDI tem a cor da entrada líquida, o IMA-B a de Renda Fixa, o Ibovespa a de Ações, o fundo a de Multimercado, e o drawdown do fundo usa a cor da saída líquida. A legenda de cada gráfico é que diz o que a cor é.
+- **Cor por papel, com paleta curta.** São cinco cores de série, reaproveitadas entre papéis. O que é fixo: cada benchmark tem sempre a mesma cor (CDI; IMA-B, IMA-B 5, IMA-B 5+ e IRF-M; Ibovespa e IBrX-100), cada classificação também (Renda Fixa, Multimercado, Ações), e o fundo tem a mesma cor no retorno acumulado e no ponto da faixa de pares. O que não é: a mesma cor serve a papéis diferentes. O CDI tem a cor da entrada líquida, os índices da ANBIMA a de Renda Fixa, os da B3 a de Ações, o fundo a de Multimercado, e o drawdown do fundo usa a cor da saída líquida. A legenda de cada gráfico é que diz o que a cor é.
 - **Os gráficos de linha e de barras verticais têm tabela e tooltip.** O botão "Ver tabela" troca o gráfico pelos números, e o tooltip mostra o valor de cada ponto. Duas visualizações ficam de fora: as barras horizontais dos destaques de captação e resgate, que escrevem o valor ao lado de cada barra, sem tooltip nem tabela; e as faixas de pares da página do fundo, que mostram fundo, mediana e percentil ao lado da faixa e repetem tudo no texto que aparece ao passar o mouse, sem botão de tabela.
 - Números com algarismos de largura fixa. Percentuais e razões têm sempre 2 casas. Dinheiro na tabela de fundos, nos tiles e nos destaques aparece em forma compacta, com até uma casa e a escala que couber (R$ 450 mi, R$ 6,5 bi); na tabela de fundos e nos tiles, o valor completo aparece ao passar o mouse. As tabelas dos gráficos de captação trazem o dinheiro por extenso.
 - Gráfico com menos de 2 pontos não é desenhado: aparece um aviso explicando por quê.
@@ -470,16 +503,16 @@ Regras que valem para todas as telas:
 
 - **Faixa de qualidade.** "Dados até" o dia de referência, hora de geração, séries e pares série × dia útil verificados, última data de cada fonte e alertas por severidade. O cartão leva à página Qualidade. Como ler: se uma fonte está atrasada, os números dependentes dela são de antes.
 - **Destaques.** Não seguem os filtros da página.
-  - Contra o próprio benchmark em 12 meses: quantas séries de Público Geral (sem veículos estruturais) bateram o benchmark principal (4.5), com fundo, benchmark e excesso em p.p. Na rodada de 24/09/2026, 6 de 36. Numa linha pequena, a leitura contra o CDI (5 de 36).
+  - Contra o próprio benchmark em 12 meses: quantas séries de Público Geral (sem veículos estruturais) bateram o benchmark principal (4.5), com fundo, benchmark e excesso em p.p. Só entram séries com 12 meses. Na rodada com dados até 25/09/2026, 5 de 36: Inflação Curta (+1,22 p.p. sobre o IMA-B), Dinâmico CDI (+0,50), Dinâmico Institucional (+0,22), Crédito Privado IU Seleção (+0,07) e Inflação (+0,07). Numa linha pequena, a leitura contra o CDI (5 de 36).
   - Maiores captações e maiores resgates em 12 meses, no mesmo recorte, cada barra com link para o fundo. Séries com menos de 12 meses entram, com `*` de janela parcial.
-  - Evento de crédito: o dia, na janela inteira (desde 01/09/2024), com mais quedas isoladas, isto é, alertas médios de salto de cota com retorno negativo e fora de dia de mercado, desde que em pelo menos 3 CNPJs distintos. Na rodada de 24/09/2026 é 09/12/2024. O cartão mostra os fundos (CNPJs distintos) e, entre parênteses, as séries: "10 fundos (13 séries)", porque as subclasses que herdam a mesma cota repetem a queda (ver 5.2).
+  - Evento de crédito: o dia, na janela inteira (desde 01/09/2024), com mais quedas isoladas, isto é, alertas médios de salto de cota com retorno negativo e fora de dia de mercado, desde que em pelo menos 3 CNPJs distintos. Na rodada com dados até 25/09/2026 é 09/12/2024. O cartão mostra os fundos (CNPJs distintos) e, entre parênteses, as séries: "10 fundos (13 séries)", porque as subclasses que herdam a mesma cota repetem a queda (ver 5.2).
   - Fundos incentivados: aviso de que o retorno pela cota provavelmente está subestimado, com o retorno e a posição entre pares de cada série de Público Geral com "incentivad" no nome e retorno de 12 meses (ver 7).
-- **Frase de resumo, no topo.** PL e captação de 12 meses das classes não exclusivas sem veículos estruturais, quantas séries de Público Geral bateram o próprio benchmark e quantos alertas estão abertos. Na rodada de 24/09/2026: R$ 14,8 bi, R$ 1,9 bi, 6 de 36 e 30. Não segue os filtros. O selo de abertos só fica colorido quando há alerta alto aberto.
+- **Frase de resumo, no topo.** PL e captação de 12 meses das classes não exclusivas sem veículos estruturais, quantas séries de Público Geral bateram o próprio benchmark e quantos alertas estão abertos. Na rodada com dados até 25/09/2026: "Fundos não exclusivos da Icatu Vanguarda, sem veículos estruturais: R$ 14,8 bi de PL em 58 classes e R$ 1,9 bi de captação líquida em 12 meses. Das 36 séries de Público Geral com 12 meses, 5 bateram o próprio benchmark. 30 alertas a investigar nas 75 séries monitoradas." Não segue os filtros. A frase não repete a data: na Visão geral, o "Dados até" aparece uma vez só, no cartão de fontes da faixa de qualidade. O selo de abertos só fica colorido quando há alerta alto aberto.
 - **Filtros.** Público (padrão Público Geral), classificação CVM e "Incluir veículos estruturais" (desligado). Mudam os tiles "Dos fundos exibidos" e a tabela. Os filtros e o "Incluir exclusivos" são mantidos ao voltar para a página.
-- **Tiles "Dos fundos exibidos".** PL e captação líquida em 12 meses, somados das séries visíveis. O texto de apoio diz quantas séries têm captação com janela parcial.
-- **Tiles "Da gestora".** PL e captação em 12 meses de todas as classes do escopo, de todos os públicos: por padrão, as 58 classes não exclusivas sem veículos estruturais (R$ 14,8 bi e R$ 1,9 bi na rodada de 24/09/2026). "Incluir veículos estruturais" passa para as 69 classes não exclusivas (R$ 27,1 bi e R$ 9,2 bi); "Incluir exclusivos", para as 246 classes (R$ 93,3 bi). Não seguem os filtros de público e classificação. A diferença para "Dos fundos exibidos" é o recorte: lá é a soma das séries visíveis na tabela.
+- **Tiles "Dos fundos exibidos".** PL e captação líquida em 12 meses, somados das séries visíveis. O texto de apoio diz quantas séries têm captação com janela parcial e avisa que a captação de uma classe antes de ela criar subclasses não entra nas séries, só no total da gestora. Por isso, com Público = Todos, a soma das séries dá R$ 1,65 bi contra R$ 1,93 bi do total; a diferença de R$ 274,2 mi é quase toda do `58327943000103`, com R$ 289,9 mi antes das subclasses.
+- **Tiles "Da gestora".** PL e captação em 12 meses de todas as classes do escopo, de todos os públicos: por padrão, as 58 classes não exclusivas sem veículos estruturais (R$ 14,8 bi e R$ 1,9 bi na rodada com dados até 25/09/2026). "Incluir veículos estruturais" passa para as 69 classes não exclusivas (R$ 27,1 bi e R$ 9,2 bi); "Incluir exclusivos", para as 246 classes (R$ 93,4 bi). Não seguem os filtros de público e classificação. O tile avisa que o FIC da casa e o fundo em que ele investe entram os dois na soma (4.4). A diferença para "Dos fundos exibidos" é o recorte: lá é a soma das séries visíveis na tabela.
 - **Captação líquida mensal por classificação.** Barras agrupadas por mês, uma por classificação CVM, nos últimos 12 meses. Barra abaixo de zero é saída líquida. O último mês é parcial até o dia de referência. Segue "Incluir exclusivos" e "Incluir veículos estruturais". Sem os estruturais, o pico de jan/2026 do Veículo Especial Bancário (`64203379000110`) sai do gráfico.
-- **Tabela de fundos.** Uma linha por série, ordenada por PL. Classificação CVM; retorno, % do CDI, volatilidade, drawdown e Sharpe de 12 meses (traço em série "DI de um dia", com o motivo ao passar o mouse, ver 4.3); PL; captação em 12 meses (`*` = janela parcial); cotistas; excesso de 12 meses sobre o benchmark principal, em p.p., com o nome do benchmark; posição entre pares ("P71 ret · P2 vol · 358": percentil do retorno, da volatilidade e número de pares); alertas altos e médios. No celular, cada fundo vira um cartão com retorno, % do CDI, PL e uma linha com o excesso, os pares e os alertas. Classificação ANBIMA e público são colunas escondidas que podem ser ligadas. O nome leva à página do fundo. O nome exibido é o da subclasse ou da classe sem o prefixo da gestora e o sufixo jurídico; nomes iguais ganham um qualificador (FIFE, FIC, IU) e, se ainda se repetem, um número.
+- **Tabela de fundos.** Uma linha por série, ordenada por PL. Classificação CVM; retorno, % do CDI, volatilidade, drawdown e Sharpe de 12 meses (traço em série "DI de um dia", com o motivo ao passar o mouse, ver 4.3); PL; captação em 12 meses (`*` = janela parcial); cotistas; excesso de 12 meses sobre o benchmark principal, em p.p., com o nome do benchmark; posição entre pares ("P68 ret · P2 vol · 360": percentil do retorno, da volatilidade e número de pares); alertas altos e médios. No celular, cada fundo vira um cartão com retorno, % do CDI, PL e uma linha com o excesso, os pares e os alertas. Classificação ANBIMA e público são colunas escondidas que podem ser ligadas. O nome leva à página do fundo. O nome exibido é o da subclasse ou da classe sem o prefixo da gestora e o sufixo jurídico; nomes iguais ganham um qualificador (FIFE, FIC, IU) e, se ainda se repetem, um número.
 
 ### 6.2 Página do fundo
 
@@ -506,11 +539,12 @@ Uma página curta que serve de roteiro da apresentação: o problema, as fontes 
 
 ## 7. Limitações conhecidas
 
-- **Cota não ajustada por evento.** O informe traz a cota depois de amortizações e distribuições, sem dizer que houve evento. O retorno pela cota subestima o que o cotista recebeu. Os fundos incentivados de infraestrutura, que pagam rendimentos, aparecem no fim da fila: `54023112000197` com −4,36 % em 12 meses e percentil 4 % entre 359 pares; `34793170000192-BNAX91750170440`, `34793170000192-D36IH1750170657` e `53248945000193` com percentil zero. Parte disso é provavelmente esse efeito; **a confirmar** com a lâmina. Quando a distribuição sai como resgate, a regra 4 também dispara.
+- **Cota não ajustada por evento.** O informe traz a cota depois de amortizações e distribuições, sem dizer que houve evento. O retorno pela cota subestima o que o cotista recebeu. Os fundos incentivados de infraestrutura, que pagam rendimentos, aparecem no fim da fila: `54023112000197` com −4,13 % em 12 meses e percentil 4 % (P4) entre 361 pares; `34793170000192-BNAX91750170440`, `34793170000192-D36IH1750170657` e `53248945000193` com percentil zero. Parte disso é provavelmente esse efeito; **a confirmar** com a lâmina. Quando a distribuição sai como resgate, a regra 4 também dispara.
 - **Pares por classificação ANBIMA não separam incentivados.** Um fundo incentivado, isento de IR para a pessoa física, compete com fundos de crédito comuns da mesma classificação. A comparação é antes do IR do cotista, o que tira a vantagem do incentivado.
 - **Decomposição mensal do PL supõe fluxo no fim do mês.** Com fluxo grande perto do PL, o resíduo infla. Exemplo: `54198519000155-TY3I61766775472` (Igaraté Long Biased IBOV) em fev/2026. O PL passou de R$ 1,8 mi para R$ 42,5 mi com aplicação de R$ 39,9 mi, e o resíduo deu 44 % do PL inicial. Trocar a base para o maior PL não resolve (ainda dá 1,9 %). Decidido em 28/09/2026: a regra fica como está; a decomposição diária está em `PRODUCTION.md`.
-- **Benchmark por classificação, não por regulamento.** Um fundo que declara IPCA, IMA-B 5 ou IRF-M é comparado com o IMA-B: o Pré-Fixado declara IRF-M (coletado, mas não usado) e a Inflação Curta, de duração média, seria mais bem comparada com o IMA-B 5. O Iporã PG Inflação é Multimercado e é comparado com o CDI; os Igaraté Long Biased da classe Ações, com o Ibovespa, embora um long biased raramente persiga o índice. Fundo de crédito de Renda Fixa que não declara "DI de um dia" (por exemplo, "Não se aplica") ainda recebe beta contra o IMA-B. Só o IBrX foi resolvido (4.5).
-- **IMA-B pelo download diário público da ANBIMA.** Um POST por dia, sem contrato nem API. Se a ANBIMA mudar o formulário, a coleta quebra. Os outros IMAs são coletados e não usados.
+- **Benchmark pelo cadastro, não pelo regulamento.** O índice declarado vale quando está no mapa (4.5); quem declara "OUTROS", "Não se aplica" ou IPCA segue a classificação. A Inflação Curta (`10922432000103`) e o Igaraté Long Biased IMA B-5 (`54198519000155-UBQKC1766775210`) declaram "OUTROS" e são de IMA-B 5 pelo nome: são comparados com o IMA-B e com o Ibovespa, e contra o IMA-B 5 os dois perdem 0,38 p.p. Com eles, a manchete seria 4 de 36, não 5. Os Igaraté Long Biased da classe Ações sem índice declarado ficam no Ibovespa, embora um long biased raramente persiga o índice. Fundo de crédito de Renda Fixa que não declara "DI de um dia" (por exemplo, "Não se aplica") ainda recebe beta contra o IMA-B.
+- **Agregado da gestora conta FIC e master duas vezes.** O FIC da casa e o fundo da casa em que ele investe entram os dois no PL e na captação "Da gestora". Caso certo: `54023112000197` e o FIC dele, `53248945000193`, com o mesmo PL (R$ 49,4 mi) e 1 cotista cada. Teto: cerca de R$ 1,66 bi, 11 % do PL não exclusivo sem estruturais (4.4). Separar pede a carteira (CDA) de cada FIC; é próximo passo.
+- **IMAs pelo download diário público da ANBIMA.** Um POST por dia, sem contrato nem API. Se a ANBIMA mudar o formulário, a coleta quebra. IMA-S e IMA-GERAL são coletados e não usados.
 - **Pares só para Público Geral e PL acima de R$ 50 milhões.** Séries de Profissional e Qualificado não têm posição entre pares. O grupo inclui outros fundos da própria gestora com CNPJ diferente (30 séries da gestora são pares elegíveis).
 - **Viés de sobrevivência nos pares, e FIC e master como pares distintos** (4.6).
 - **Dia de mercado sem índice global.** A regra 2 reconhece mercado pelo Ibovespa, pelo IMA-B e pela fração de pares da mesma classificação. Fundos no exterior (FOF Ações Globais USD, Veículo Especial no Exterior 2) não têm índice coletado: os dias de mercado global deles viram tratativa à mão (5.3). A fração de pares é calculada nas 3.392 séries candidatas, não em todos os fundos do país.
@@ -539,6 +573,7 @@ Os limiares do cálculo e da qualidade são constantes com nome em `pipeline/src
 | `MIN_OBSERVATIONS` | 60 | `calc/risk.py` | Mínimo para vol, Sharpe, beta e tracking error |
 | `MIN_PEER_NET_ASSETS` | R$ 50 mi | `calc/peers.py` | Elegibilidade de par |
 | `MIN_PEERS` | 5 | `calc/peers.py` | Mínimo para publicar posição |
+| `DECLARED_BENCHMARKS` | IBrX → IBrX-100; IRF-M → IRF-M; NTN-B todas → IMA-B; NTN-B até 5 anos → IMA-B 5; NTN-B mais de 5 anos → IMA-B 5+ | `calc/benchmarks.py` | Benchmark declarado (4.5) |
 | `JUMP_LOOKBACK`, `JUMP_SIGMAS` | 60, 5 | `quality/checks.py` | Salto de cota (regra 2) |
 | `MATERIAL_DEVIATION` | 0,1 % | `quality/checks.py` | Piso do salto |
 | `FIXED_INCOME_JUMP` | 3 % | `quality/checks.py` | Salto absoluto em Renda Fixa |
