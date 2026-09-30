@@ -188,7 +188,7 @@
           {/if}
           <ul
             class="flex flex-col gap-1 text-sm"
-            aria-label={`Séries com queda isolada em ${date(event.date)}`}
+            aria-label={`Séries que caíram em ${date(event.date)}`}
           >
             {#each event.series as entry (entry.seriesId)}
               <li class="flex items-baseline justify-between gap-3">
@@ -198,7 +198,7 @@
             {/each}
           </ul>
           <p class="text-base-content/70 grow-0 text-xs">
-            Queda isolada: fora do padrão da própria série e não explicada pelo mercado.
+            Queda fora do padrão da própria série, que o Ibovespa e o IMA-B não explicam.
             <a class="link" href={resolve("/qualidade")}>Ver qualidade</a>.
           </p>
         </div>

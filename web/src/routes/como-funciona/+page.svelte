@@ -62,8 +62,8 @@
   const FINDINGS = [
     {
       when: "09/12/2024",
-      title: "Evento de crédito da casa",
-      text: "10 fundos de crédito (13 séries) caíram no mesmo dia, de −0,11 % a −0,53 %, sem mercado nenhum se mexer. Provável remarcação de um emissor comum às carteiras.",
+      title: "Evento de crédito",
+      text: "10 fundos de crédito da casa (13 séries) caíram no mesmo dia, de −0,11 % a −0,53 %, sem que o Ibovespa ou o IMA-B explicassem. Fundos de crédito de outras gestoras também caíram, como o JGP (−1,50 %) e o Premium Institucional (−2,07 %): provável remarcação de um emissor presente em várias carteiras.",
     },
     {
       when: "16/03/2026",
