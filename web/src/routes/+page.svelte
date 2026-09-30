@@ -442,21 +442,18 @@
   <section class="flex flex-col gap-1" aria-label="Resumo da gestora">
     <p class="text-base leading-relaxed sm:text-lg">
       Fundos não exclusivos da {MANAGER_SHORT_NAME}, sem veículos estruturais:
-      <strong class="font-semibold tabular-nums">{moneyCompact(headline?.net_assets)}</strong> de PL e
+      <strong class="font-semibold tabular-nums">{moneyCompact(headline?.net_assets)}</strong> de PL em
+      {integer(headline?.classes ?? 0)} classes e
       <strong class="font-semibold tabular-nums">{moneyCompact(headline?.net_flow_12m)}</strong> de
       captação líquida em 12 meses.
       {#if data.highlights.benchmark !== null}
-        Em Público Geral,
-        <strong class="font-semibold tabular-nums"
-          >{integer(data.highlights.benchmark.beating)} de {integer(data.highlights.benchmark.measured)}</strong
-        >
-        bateram o próprio benchmark em 12 meses.
+        Das {integer(data.highlights.benchmark.measured)} séries de Público Geral com 12 meses,
+        <strong class="font-semibold tabular-nums">{integer(data.highlights.benchmark.beating)}</strong>
+        bateram o próprio benchmark.
       {/if}
       <strong class="font-semibold tabular-nums">{integer(openToInvestigate)}</strong>
-      {openToInvestigate === 1 ? "alerta a investigar" : "alertas a investigar"}.
-    </p>
-    <p class="text-base-content/70 text-xs">
-      Dados até {date(data.meta.as_of)}, o último dia completo do informe diário da CVM.
+      {openToInvestigate === 1 ? "alerta a investigar" : "alertas a investigar"} nas
+      {integer(data.meta.quality.checked_series)} séries monitoradas.
     </p>
   </section>
 
@@ -496,7 +493,8 @@
     <div class="flex flex-col gap-0.5">
       <h2 id="visible-tiles-title" class="text-sm font-semibold">Dos fundos exibidos</h2>
       <p class="text-base-content/70 text-xs">
-        Soma das séries da tabela abaixo: segue público, classificação e veículos estruturais.
+        Soma das séries da tabela abaixo: segue público, classificação e veículos estruturais. A captação de
+        uma classe antes de ela criar subclasses não entra nas séries, só no total da gestora.
       </p>
     </div>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -67,8 +67,7 @@
   <div class="flex flex-col gap-0.5">
     <h2 id="highlights-title" class="text-base font-semibold">Destaques</h2>
     <p class="text-base-content/70 text-xs">
-      Dados até {date(highlights.asOf)}. Cada cartão diz o próprio recorte, e nenhum segue os filtros
-      da página.
+      Cada cartão diz o próprio recorte, e nenhum segue os filtros da página.
     </p>
   </div>
 
